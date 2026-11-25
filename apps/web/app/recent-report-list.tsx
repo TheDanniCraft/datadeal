@@ -75,23 +75,18 @@ export function RecentReportList({
                 <ItemCard.Action>
                   <Chip
                     data-rating={grade.toLowerCase()}
-                    className="h-auto rounded-lg bg-[color-mix(in_oklab,var(--rating)_12%,var(--surface))]! px-2.5 py-1 text-[var(--rating)]!"
+                    className="h-10 w-12 justify-center rounded-xl bg-[color-mix(in_oklab,var(--rating,var(--muted))_12%,var(--surface))]! p-0 text-[var(--rating,var(--muted))]!"
                     aria-label={
                       score === null
                         ? "Unrated"
                         : `${score} out of 100, ${grade}`
                     }
                   >
-                    <Chip.Label className="flex items-baseline gap-1.5 whitespace-nowrap">
-                      {score !== null && (
-                        <span className="tabular-nums">
-                          <strong className="text-base leading-none">
-                            {score}
-                          </strong>
-                          <span className="text-xs">/100</span>
-                        </span>
-                      )}
-                      <span className="text-xs font-medium">{grade}</span>
+                    <Chip.Label
+                      aria-hidden="true"
+                      className="text-lg leading-none font-semibold tabular-nums"
+                    >
+                      {score ?? "–"}
                     </Chip.Label>
                   </Chip>
                 </ItemCard.Action>

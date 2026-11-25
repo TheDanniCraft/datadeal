@@ -51,6 +51,7 @@ import { ratingGuidance } from "../../../lib/rating-guidance";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Accordion, Avatar, Button, Card, Chip, Spinner } from "@heroui/react";
 import { Timeline } from "@heroui-pro/react/timeline";
+import { HoverCard } from "@heroui-pro/react/hover-card";
 import { LineChart } from "@heroui-pro/react/line-chart";
 import { EmptyState } from "@heroui-pro/react/empty-state";
 import {
@@ -1064,6 +1065,90 @@ function jobStateLabel(state: string) {
   return "In progress";
 }
 
+function describeDestination(item: FlowDestination, currentHost: string) {
+  const provider = providerDescriptions.get(
+    item.label.toLowerCase().replace(/^www\./, ""),
+  );
+  const title = provider?.name ?? item.service?.vendor ?? item.label;
+  const text = [
+    provider?.description ??
+      item.service?.reason ??
+      (!item.explanation ? "We couldn't identify what this service does." : ""),
+    provider?.relatedSite === currentHost.toLowerCase().replace(/^www\./, "")
+      ? "The site and this service belong to the same company."
+      : "",
+    item.explanation,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return { provider, title, text };
+}
+
+function DestinationCard({
+  item,
+  currentHost,
+}: {
+  item: FlowDestination;
+  currentHost: string;
+}) {
+  const { provider, title, text } = describeDestination(item, currentHost);
+  const pages = new Set(item.visits?.map(({ page }) => page ?? "/"));
+  const when = [
+    item.visits?.some(({ scenario }) => scenario === "default") &&
+      "before you choose",
+    item.visits?.some(({ scenario }) => scenario === "rejected") &&
+      "after rejecting",
+    item.visits?.some(({ scenario }) => scenario === "accepted") &&
+      "after accepting",
+  ].filter(Boolean);
+  return (
+    <div className="grid gap-2.5 text-sm">
+      <div className="flex items-center gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-default">
+          <SiteIcon host={item.label} />
+        </span>
+        <span className="grid min-w-0">
+          <strong className="truncate leading-tight">{title}</strong>
+          {title !== item.label && (
+            <span className="truncate text-xs text-muted">{item.label}</span>
+          )}
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {item.service && (
+          <span
+            className={
+              "rounded-full px-2 py-0.5 text-xs font-medium " +
+              servicePurposeTone[item.service.purpose]
+            }
+          >
+            {servicePurposeLabels[item.service.purpose]}
+          </span>
+        )}
+        <span className="rounded-full bg-default px-2 py-0.5 text-xs font-medium">
+          {flowEvidenceLabels[flowEvidence(item)]}
+        </span>
+      </div>
+      <p className="m-0! leading-relaxed">{text}</p>
+      {item.visits && when.length > 0 && (
+        <p className="m-0! text-xs text-muted">
+          Seen on {pages.size === 1 ? "1 page" : pages.size + " pages"},{" "}
+          {when.join(" and ")}.
+        </p>
+      )}
+      {provider && (
+        <a
+          className="inline-link text-xs"
+          href={provider.source}
+          rel="noreferrer"
+        >
+          About {provider.name}
+        </a>
+      )}
+    </div>
+  );
+}
+
 const domainLike = /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i;
 
 /** Favicon through our own endpoint, so the visitor never contacts the host. */
@@ -1142,6 +1227,7 @@ export function Flow({
   const helpId = useId();
   const drag = useRef<{ id: number; x: number; y: number } | null>(null);
   const [selected, setSelected] = useState(0);
+  const [card, setCard] = useState<string | null>(null);
   const ready = useClientReady();
   const [group, setGroup] = useState(0);
   const [leafReferences, setLeafReferences] = useState<{
@@ -1180,8 +1266,6 @@ export function Flow({
     leafReferences?.provider === active.label
       ? leafReferences.sites
       : (related?.references ?? []);
-  const relatedService =
-    provider?.relatedSite === currentHost.toLowerCase().replace(/^www\./, "");
   const visited = [host, ...path.map((entry) => entry.host)];
   // Every connection is drawn: concentric rings holding 6, 12, 18, … nodes.
   const visible = connections;
@@ -1343,39 +1427,65 @@ export function Flow({
             {currentHost}
           </span>
         </strong>
-        {visible.map((item, index) => {
-          return (
-            <Button
-              key={item.label}
-              size="sm"
-              aria-pressed={selected === index}
-              aria-label={item.label}
-              aria-describedby={helpId + "-" + flowEvidence(item)}
-              variant={selected === index ? "primary" : "secondary"}
-              className="flow-destination absolute! max-w-[min(34%,10rem)] -translate-1/2 text-center leading-tight whitespace-normal wrap-anywhere rounded-full! p-0! size-[clamp(2.8rem,6vw,3.75rem)]"
-              style={{
-                left: points[index].x + "%",
-                top: points[index].y + "%",
-              }}
-              isDisabled={!ready || loading}
-              onPress={() => {
-                setNotice("");
-                setSelected(index);
-              }}
+        {visible.map((item, index) => (
+          <div
+            key={item.label}
+            className="absolute -translate-1/2"
+            style={{
+              left: points[index].x + "%",
+              top: points[index].y + "%",
+            }}
+          >
+            <HoverCard
+              openDelay={250}
+              closeDelay={150}
+              open={card === item.label}
+              onOpenChange={(open) =>
+                setCard((current) =>
+                  open ? item.label : current === item.label ? null : current,
+                )
+              }
             >
-              <SiteIcon
-                host={item.label}
-                fallback={item.declared && !item.observed ? "policy" : "globe"}
-              />
-              <span
-                className="flow-label pointer-events-none absolute top-full left-1/2 mt-1.5 w-max max-w-[min(31vw,13rem)] -translate-x-1/2 truncate text-xs leading-tight text-foreground"
-                aria-hidden="true"
+              <HoverCard.Trigger className="inline-flex">
+                <Button
+                  size="sm"
+                  aria-pressed={selected === index}
+                  aria-label={item.label}
+                  aria-describedby={helpId + "-" + flowEvidence(item)}
+                  variant={selected === index ? "primary" : "secondary"}
+                  className="flow-destination relative text-center leading-tight whitespace-normal wrap-anywhere rounded-full! p-0! size-[clamp(2.8rem,6vw,3.75rem)]"
+                  isDisabled={!ready || loading}
+                  onPress={() => {
+                    setNotice("");
+                    setSelected(index);
+                    setCard(item.label);
+                  }}
+                >
+                  <SiteIcon
+                    host={item.label}
+                    fallback={
+                      item.declared && !item.observed ? "policy" : "globe"
+                    }
+                  />
+                  <span
+                    className="flow-label pointer-events-none absolute top-full left-1/2 mt-1.5 w-max max-w-[min(31vw,13rem)] -translate-x-1/2 truncate text-xs leading-tight text-foreground"
+                    aria-hidden="true"
+                  >
+                    {item.label}
+                  </span>
+                </Button>
+              </HoverCard.Trigger>
+              <HoverCard.Content
+                placement="bottom"
+                className="w-80 max-w-[calc(100vw-2rem)]"
+                aria-label={item.label}
               >
-                {item.label}
-              </span>
-            </Button>
-          );
-        })}
+                <HoverCard.Arrow />
+                <DestinationCard item={item} currentHost={currentHost} />
+              </HoverCard.Content>
+            </HoverCard>
+          </div>
+        ))}
       </div>
       <div className="flow-reset absolute! right-2 bottom-2 flex gap-1">
         <Button
@@ -1493,49 +1603,12 @@ export function Flow({
         </Button>
       )}
 
-      <section
-        className="flow-provider my-4 rounded-2xl border border-separator p-4 sm:p-5"
-        aria-live="polite"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="m-0 text-base font-semibold wrap-anywhere">
-            {provider?.name ?? active.service?.vendor ?? active.label}
-          </h4>
-          <span className="flex flex-wrap gap-1.5">
-            {active.service && (
-              <span
-                className={
-                  "rounded-full px-2.5 py-0.5 text-xs font-medium " +
-                  servicePurposeTone[active.service.purpose]
-                }
-              >
-                {servicePurposeLabels[active.service.purpose]}
-              </span>
-            )}
-            <span
-              className="rounded-full bg-default px-2.5 py-0.5 text-xs font-medium"
-              data-evidence={flowEvidence(active)}
-            >
-              {flowEvidenceLabels[flowEvidence(active)]}
-            </span>
-          </span>
-        </div>
-        {(provider?.name ?? active.service?.vendor ?? active.label) !==
-          active.label && (
-          <p className="mt-0.5 mb-0 text-xs text-muted">{active.label}</p>
-        )}
-        <p className="mt-3 mb-0 text-sm leading-relaxed">
-          {provider
-            ? provider.description + " "
-            : active.service
-              ? active.service.reason + " "
-              : !active.explanation &&
-                "We couldn't identify what this service does. "}
-          {relatedService &&
-            "The site and destination belong to the same company. "}
-          {active.explanation}
-        </p>
-      </section>
+      <h4 className="flow-provider mt-4 mb-1 flex flex-wrap items-baseline gap-x-2 text-base font-semibold wrap-anywhere">
+        {provider?.name ?? active.service?.vendor ?? active.label}
+        <span className="text-sm font-normal text-muted">
+          {active.visits ? "where it was seen" : active.label}
+        </span>
+      </h4>
       {provider && (
         <p>
           <a className="inline-link" href={provider.source} rel="noreferrer">
