@@ -1055,11 +1055,34 @@ export function Flow({
             />
           ))}
         </svg>
-        <strong className="flow-root absolute top-1/2 left-1/2 flex max-w-[min(52%,14rem)] -translate-1/2 items-center gap-1.5 rounded-full border border-separator bg-surface px-3.5 py-3 text-center wrap-anywhere">
-          {currentFavicon && (
-            <img src={currentFavicon} alt="" width={18} height={18} />
+        {/* Same shape as the recipients: icon in the bubble, name below it. */}
+        <strong className="flow-root absolute top-1/2 left-1/2 grid size-[clamp(3.2rem,8vw,4.75rem)] -translate-1/2 place-items-center rounded-full border-2 border-accent bg-surface">
+          {currentFavicon ? (
+            <img
+              src={currentFavicon}
+              alt=""
+              width={28}
+              height={28}
+              className="size-[55%] object-contain"
+            />
+          ) : (
+            <svg
+              aria-hidden="true"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <ellipse cx="12" cy="12" rx="4" ry="9" />
+              <path d="M3 12h18" />
+            </svg>
           )}
-          {currentHost}
+          <span className="flow-root-label pointer-events-none absolute top-full left-1/2 mt-1.5 w-max max-w-[14rem] -translate-x-1/2 truncate text-sm font-semibold">
+            {currentHost}
+          </span>
         </strong>
         {visible.map((item, index) => {
           const icon = bundledSiteFavicon(item.label.toLowerCase());
@@ -1160,7 +1183,7 @@ export function Flow({
       <div
         inert
         aria-hidden="true"
-        className="[&_.flow-network]:h-48! [&_.flow-reset]:hidden [&_.flow-root]:px-2 [&_.flow-root]:py-1 [&_.flow-root]:text-xs [&_.flow-label]:text-[.66rem] [&_.flow-destination]:size-8!"
+        className="[&_.flow-network]:h-48! [&_.flow-reset]:hidden [&_.flow-root]:size-9! [&_.flow-root-label]:text-[.66rem] [&_.flow-label]:text-[.66rem] [&_.flow-destination]:size-8!"
       >
         {network}
       </div>
