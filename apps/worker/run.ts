@@ -15,8 +15,10 @@ import { connect, type ScanStage } from "@datadeal/database";
 import {
   configuredContentPageLimit,
   isRetryableScanFailure,
+  researchVendorPolicy,
   scan,
 } from "@datadeal/scanner";
+import { analyzeInventory } from "./inventory-analysis";
 import { analysisFailure, analyzeWithRetry } from "./analysis-retry";
 import {
   consentSettleMs,
@@ -419,8 +421,48 @@ export async function runWorker(
           report,
           publishDataPractices(report, analysis?.result.output.practices),
         );
+      if (report) {
+        // Scoring v2 input, independent of the policy analysis. A failure leaves the report on the previous rules.
+        const inventory = await analyzeInventory(
+          analyzer,
+          report,
+          researchVendorPolicy,
+          () => renewLease("analysis"),
+        ).catch((error: unknown) => {
+          const { reason, providerStatus } = analysisFailure(error);
+          console.warn(
+            JSON.stringify({
+              event: "inventory_unavailable",
+              scanId: job.id,
+              reason,
+              providerStatus,
+            }),
+          );
+          return undefined;
+        });
+        if (inventory) report.storageInventory = inventory;
+      }
       if (!(await renewLease("publication"))) continue;
-      const published = await db.finish(job.id, job.owner, report, analysis);
+      // A report that fails validation fails this job, not the whole worker.
+      const published = await db
+        .finish(job.id, job.owner, report, analysis)
+        .catch(async (error: unknown) => {
+          const issues =
+            error && typeof error === "object" && "issues" in error
+              ? (error.issues as { path: PropertyKey[] }[])
+                  .slice(0, 5)
+                  .map(({ path }) => path.join("."))
+              : undefined;
+          console.error(
+            JSON.stringify({
+              event: "publication_invalid",
+              scanId: job.id,
+              issues,
+            }),
+          );
+          await db.finish(job.id, job.owner, null).catch(() => undefined);
+          return false;
+        });
       console.info(
         JSON.stringify({
           event: published ? "scan_finished" : "scan_lease_lost",

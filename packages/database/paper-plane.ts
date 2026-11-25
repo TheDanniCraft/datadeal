@@ -186,7 +186,8 @@ export function paperPlaneStorage(sql: Sql) {
         if (
           ((command === "complete" &&
             row.state === "pending" &&
-            (row.offer === "unlock" || (row.offer === "choice" && Boolean(row.user_id)))) ||
+            (row.offer === "unlock" ||
+              (row.offer === "choice" && Boolean(row.user_id)))) ||
             (command === "open" && row.state === "choose")) &&
           !(await lockRewardableScan(tx, row.scan_id, row.domain))
         )
@@ -232,7 +233,10 @@ export function paperPlaneStorage(sql: Sql) {
           if (row.state !== "choose" || !actor.userId)
             return { code: "conflict" as const };
           await applyReportPoints(tx, {
-            userId: actor.userId, delta: guaranteedPoints, operation: "ad_points", referenceId: id,
+            userId: actor.userId,
+            delta: guaranteedPoints,
+            operation: "ad_points",
+            referenceId: id,
           });
           row.state = "points";
           row.user_id = actor.userId;

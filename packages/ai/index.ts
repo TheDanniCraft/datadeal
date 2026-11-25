@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { StorageInventory } from "@datadeal/contracts/storage-inventory";
+import { classifyInventory } from "./inventory";
 import { vendorDisclosures } from "@datadeal/contracts/vendor-listing";
 import { c15tChoiceDisclosure } from "@datadeal/contracts/c15t-choice";
 import { googleCookieDeclarations } from "@datadeal/contracts/google-cookies";
@@ -87,6 +89,12 @@ export interface EvidenceAnalyzer {
   analyze(
     evidence: readonly Evidence[],
   ): Promise<z.infer<typeof candidateList>>;
+  /** Scoring v2: classifies the value-free storage and recipient inventory. */
+  classifyInventory?(
+    inventory: Pick<StorageInventory, "storage" | "recipients">,
+    evidence: readonly Evidence[],
+    itemIds?: readonly string[],
+  ): ReturnType<typeof classifyInventory>;
 }
 
 export function privacyDocumentSelector(
@@ -122,7 +130,7 @@ export function privacyDocumentSelector(
     const selection = z
       .object({ ids: z.array(z.string()) })
       .strict()
-      .parse(JSON.parse(output));
+      .parse(jsonOutput(output));
     return [...new Set(selection.ids.filter((id) => ids.has(id)))].slice(0, 2);
   };
 }
@@ -687,7 +695,7 @@ export async function completePolicyReview(
     );
     const { summaries } = policySummaryResponse
       .extend({ summaries: z.array(z.unknown()).max(3) })
-      .parse(JSON.parse(raw));
+      .parse(jsonOutput(raw));
     const brief = [];
     const claims = [];
     const seen = new Set<string>();
@@ -821,7 +829,7 @@ export async function completePracticeReview(
     );
     const rows = z
       .object({ judgments: z.array(z.unknown()).max(12) })
-      .parse(JSON.parse(output));
+      .parse(jsonOutput(output));
     const prior = new Map(candidates.practices?.map((p) => [p.factId, p]));
     for (const raw of rows.judgments) {
       const entry = compact.shape.judgments.element.safeParse(raw);
@@ -939,6 +947,25 @@ export function openAIAnalyzer(
       .parse(await response.json());
     return wire.choices[0].message.content;
   }
+  return completionAnalyzer(model, complete);
+}
+
+/** One model request: instructions + untrusted input in, raw text out. */
+export type Completion = (
+  instructions: string,
+  input: string,
+  signal: AbortSignal,
+  maxOutputTokens: number,
+) => Promise<string>;
+
+/**
+ * Builds the evidence analyzer on top of any completion transport. Citation
+ * validation and publication rules are identical for every provider.
+ */
+export function completionAnalyzer(
+  model: string,
+  complete: Completion,
+): EvidenceAnalyzer {
   return {
     model,
     selectPrivacyDocuments: privacyDocumentSelector(
@@ -950,10 +977,33 @@ export function openAIAnalyzer(
       const output = await complete(
         analysisInstructions,
         JSON.stringify(practiceAnalysisInput(supplied)),
-        AbortSignal.timeout(95000),
-        6000,
+        AbortSignal.timeout(180000),
+        16000,
       );
-      return completeAnalysisReview(JSON.parse(output), supplied, complete);
+      return completeAnalysisReview(jsonOutput(output), supplied, complete);
     },
+    classifyInventory: (inventory, evidence, itemIds) =>
+      classifyInventory(complete, jsonOutput, inventory, evidence, itemIds),
   };
 }
+
+/** Parses a JSON object even if the model wrapped it in a Markdown fence. */
+export function jsonOutput(text: string): unknown {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch (error) {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start < 0 || end <= start) throw error;
+    return JSON.parse(trimmed.slice(start, end + 1));
+  }
+}
+
+export { claudeAnalyzer, claudeCompletion, type ClaudeEffort } from "./claude";
+
+export {
+  classifyInventory,
+  inventoryPromptVersion,
+  validateClassifications,
+} from "./inventory";

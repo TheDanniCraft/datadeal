@@ -495,14 +495,68 @@ function RatingCalculation({
               <p>
                 <strong>
                   {scenarioLabel} ·{" "}
-                  {score.practiceAssessment ? score.verdict : verdict}
+                  {score.practiceAssessment || score.inventoryAssessment
+                    ? score.verdict
+                    : verdict}
                 </strong>
               </p>
-              {!score.practiceAssessment && <p>{advice}</p>}
+              {!score.practiceAssessment && !score.inventoryAssessment && (
+                <p>{advice}</p>
+              )}
               <p className="text-sm text-muted">
                 {score.confidence} confidence
               </p>
-              {score.practiceAssessment ? (
+              {score.inventoryAssessment ? (
+                <>
+                  <p>{score.inventoryAssessment.coverage}</p>
+                  <p>
+                    Each item below costs points. The largest cost counts in
+                    full, the next one half, the next a quarter, and so on.
+                    Anything that starts before you choose costs 50% more.
+                  </p>
+                  {score.inventoryAssessment.costs.length ? (
+                    <ul className="m-0! list-none divide-y divide-separator p-0!">
+                      {score.inventoryAssessment.costs.map((item) => (
+                        <li
+                          key={item.itemId}
+                          className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 py-2"
+                        >
+                          <div>
+                            <p>
+                              {item.label}
+                              {item.vendor ? " · " + item.vendor : ""}
+                            </p>
+                            <span className="text-sm text-muted">
+                              {item.reason}
+                              {item.consentPenalty
+                                ? " Present before you agreed."
+                                : ""}
+                            </span>
+                          </div>
+                          <strong className="whitespace-nowrap tabular-nums">
+                            −{item.cost}
+                          </strong>
+                          <div className="flex flex-wrap gap-x-3 text-xs">
+                            {item.evidenceIds
+                              .filter((id) => evidenceById.has(id))
+                              .map((id, index) => (
+                                <a
+                                  className="inline-link"
+                                  key={id}
+                                  href={"#evidence-" + id}
+                                >
+                                  {"Evidence " + (index + 1)}
+                                </a>
+                              ))}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No tracking or outside sharing cost any points.</p>
+                  )}
+                </>
+              ) : score.practiceAssessment ? (
                 <>
                   <p>{score.practiceAssessment.coverage}</p>
                   {score.score !== null && (
@@ -627,15 +681,17 @@ function RatingCalculation({
               ) : (
                 <p>No score adjustments are available for this scan.</p>
               )}
-              {!score.practiceAssessment && score.baseScore != null && (
-                <p>
-                  Historical scoring rules. {score.baseScore}{" "}
-                  {netAdjustment < 0 ? "−" : "+"} {Math.abs(netAdjustment)} ={" "}
-                  {score.baseScore + netAdjustment} points.
-                  {score.baseScore + netAdjustment !== score.score &&
-                    " The published total is shown above."}
-                </p>
-              )}
+              {!score.practiceAssessment &&
+                !score.inventoryAssessment &&
+                score.baseScore != null && (
+                  <p>
+                    Historical scoring rules. {score.baseScore}{" "}
+                    {netAdjustment < 0 ? "−" : "+"} {Math.abs(netAdjustment)} ={" "}
+                    {score.baseScore + netAdjustment} points.
+                    {score.baseScore + netAdjustment !== score.score &&
+                      " The published total is shown above."}
+                  </p>
+                )}
               <p>
                 <a className="inline-link" href="/methodology">
                   See the scoring scale
@@ -2002,7 +2058,9 @@ export function ReportContent({
         )}
       </section>
     ) : score &&
-      (score.score != null || score.practiceAssessment?.ratings.length) ? (
+      (score.score != null ||
+        score.practiceAssessment?.ratings.length ||
+        score.inventoryAssessment?.costs.length) ? (
       calculation(score, headlineScenario)
     ) : null;
   const observedSource =
@@ -2217,7 +2275,9 @@ export function ReportContent({
           </h1>
           {score?.score != null && (
             <p className="report-decision col-span-full my-0! text-sm text-foreground sm:my-1!">
-              {score.practiceAssessment ? score.verdict : verdict}
+              {score.practiceAssessment || score.inventoryAssessment
+                ? score.verdict
+                : verdict}
             </p>
           )}
 
@@ -2307,11 +2367,13 @@ export function ReportContent({
                 >
                   {grade}
                 </p>
-                {!score.practiceAssessment && !report?.demo && (
-                  <span className="text-[.68rem] text-muted">
-                    Earlier scoring rules
-                  </span>
-                )}
+                {!score.practiceAssessment &&
+                  !score.inventoryAssessment &&
+                  !report?.demo && (
+                    <span className="text-[.68rem] text-muted">
+                      Earlier scoring rules
+                    </span>
+                  )}
               </>
             ) : (
               <>
@@ -2707,7 +2769,7 @@ export function ReportContent({
                   </>
                 )}
               </Section>
-              {!score.practiceAssessment && (
+              {!score.practiceAssessment && !score.inventoryAssessment && (
                 <Section title="Detailed findings">
                   {findings.length ? (
                     <Accordion

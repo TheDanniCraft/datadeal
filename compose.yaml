@@ -138,7 +138,9 @@ services:
       target: worker
     environment:
       <<: *app-db
-      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set the worker project API key}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?Set the worker Claude API key}
+      DATADEAL_CLAUDE_MODEL: ${DATADEAL_CLAUDE_MODEL:-claude-opus-5-5}
+      DATADEAL_CLAUDE_EFFORT: ${DATADEAL_CLAUDE_EFFORT:-medium}
       DATADEAL_BROWSER_PROXY: http://browser-egress:8080
       CONTENT_PAGE_LIMIT: ${CONTENT_PAGE_LIMIT:-3}
       DATADEAL_COMPARE_VISIT_IDENTIFIERS: ${DATADEAL_COMPARE_VISIT_IDENTIFIERS:-false}

@@ -2,6 +2,7 @@
   "type": "module",
   "name": "@datadeal/contracts",
   "dependencies": {
+    "tldts": "7.5.5",
     "zod": "^4"
   },
   "exports": {
@@ -16,7 +17,8 @@
     "./content-page": "./content-page.ts",
     "./paper-plane": "./paper-plane.ts",
     "./creem-credits": "./creem-credits.ts",
-    "./hosting-disclosure": "./hosting-disclosure.ts"
+    "./hosting-disclosure": "./hosting-disclosure.ts",
+    "./storage-inventory": "./storage-inventory.ts"
   },
   "private": true,
   "scripts": {

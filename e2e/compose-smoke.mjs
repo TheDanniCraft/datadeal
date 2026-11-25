@@ -26,7 +26,7 @@ const synthetic = {
   DATADEAL_DB_PASSWORD: secret(),
   BETTER_AUTH_SECRET: secret(),
   DATADEAL_SCAN_LIMIT_SECRET: secret(),
-  OPENAI_API_KEY: "unused-" + secret(),
+  ANTHROPIC_API_KEY: "unused-" + secret(),
 };
 function check(condition, message) {
   if (!condition) throw new Error(message);
@@ -152,7 +152,7 @@ function verifyIsolation() {
     DATADEAL_DB_PASSWORD: ["database", "worker", "web"],
     BETTER_AUTH_SECRET: ["web"],
     DATADEAL_SCAN_LIMIT_SECRET: ["web"],
-    OPENAI_API_KEY: ["worker"],
+    ANTHROPIC_API_KEY: ["worker"],
   };
   for (const [service, networks] of Object.entries(topology)) {
     const { Config, HostConfig, NetworkSettings } = inspect(service);
@@ -170,7 +170,7 @@ function verifyIsolation() {
       );
     }
     check(
-      !env.some((x) => /^(HEROUI_|DATADEAL_LOCAL_|CHATGPT_)/.test(x)),
+      !env.some((x) => /^(HEROUI_|DATADEAL_LOCAL_|CLAUDE_CODE_)/.test(x)),
       "Build or development variable present on " + service,
     );
     if (service !== "web") {

@@ -41,7 +41,8 @@ export function RequestScan({
         className={
           compact ? "gap-1 px-2.5 text-xs [&_svg]:size-3.5" : undefined
         }
-        variant="primary"
+        // On a finished report Rescan is a secondary action next to Compare.
+        variant={compact ? "secondary" : "primary"}
         size={compact ? "sm" : undefined}
         isDisabled={!ready || busy}
         onPress={async () => {

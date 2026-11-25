@@ -9,6 +9,7 @@ export { resolvePublicAddress } from "./public-address";
 import { request } from "node:https";
 import { load } from "cheerio";
 import { discoverSitemap, linkedDocuments } from "./sitemap";
+import { vendorPassages, vendorPolicyLinks } from "./vendor-research";
 import { contentPageSample } from "./content-pages";
 export { configuredContentPageLimit } from "./content-pages";
 import { findDocuments, type SelectPrivacyDocuments } from "./documents";
@@ -238,6 +239,58 @@ export function readPublicPolicyDocument(
     "document",
     true,
   );
+}
+
+/**
+ * Scoring v2 research: reads up to two privacy or cookie pages linked from a
+ * vendor's homepage that the scan actually contacted. Same SSRF-safe reader,
+ * same-origin only. Returns quoted passages as third-party evidence.
+ */
+export async function researchVendorPolicy(
+  scanId: string,
+  vendor: string,
+  referringEvidenceId: string,
+  signal: AbortSignal,
+): Promise<Evidence[]> {
+  const host = domain.parse(vendor);
+  const home = new URL("https://" + host);
+  const homepage = await readablePage(
+    home,
+    home,
+    signal,
+    0,
+    host.startsWith("www.") ? undefined : "https://www." + host,
+    2_000_000,
+  );
+  const rows: Evidence[] = [];
+  for (const url of vendorPolicyLinks(load(homepage.html), homepage.url)) {
+    const page = await readablePage(
+      url,
+      homepage.url,
+      signal,
+      0,
+      undefined,
+      800_000,
+    ).catch(() => undefined);
+    if (!page) continue;
+    for (const passage of vendorPassages(load(page.html))) {
+      rows.push({
+        id: `vendor-policy-${host}-${rows.length + 1}`,
+        scanId,
+        kind: "third_party_reference",
+        url: page.url.href,
+        retrievedAt: new Date().toISOString(),
+        excerpt: passage.excerpt,
+        observation: {
+          type: "provider_policy",
+          providerHost: host,
+          referringEvidenceId,
+          heading: passage.heading,
+        },
+      });
+    }
+  }
+  return rows;
 }
 
 export async function scan(

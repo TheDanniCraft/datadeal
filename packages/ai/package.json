@@ -2,8 +2,9 @@
   "type": "module",
   "name": "@datadeal/ai",
   "dependencies": {
-    "zod": "^4",
-    "@datadeal/contracts": "workspace:*"
+    "@anthropic-ai/sdk": "1.10.0",
+    "@datadeal/contracts": "workspace:*",
+    "zod": "^4"
   },
   "exports": "./index.ts",
   "private": true,

@@ -3,6 +3,10 @@ import { browserStorageSnapshot, evidence } from "@datadeal/contracts";
 import { buildPracticeEvidenceBundle } from "@datadeal/contracts/practice-evidence";
 import { summarizeBrowserCookies } from "./browser-storage";
 
+// Cookie names are public and kept (masked); values must never be retained.
+const withoutNames = (value: unknown) =>
+  JSON.stringify(value, (key, item) => (key === "name" ? undefined : item));
+
 it("retains only bounded recognized cookie families, coarse flags and site scope", () => {
   const base = {
     name: "unknown-private-name",
@@ -46,7 +50,7 @@ it("retains only bounded recognized cookie families, coarse flags and site scope
       { name: "_ga_*", scope: "outside_site", persistent: false },
     ],
   });
-  const serialized = JSON.stringify(browserStorageSnapshot.parse({ cookies }));
+  const serialized = withoutNames(browserStorageSnapshot.parse({ cookies }));
   expect(serialized).not.toMatch(/Q7DR12X|private|123456|_fbp/);
   expect(cookies.recognized[1].site).toBe("other.github.io");
   expect(cookies.unclassified).toEqual([
@@ -142,7 +146,7 @@ it("preserves distinct value-free facts for unknown cookie lifetimes, sites and 
   const facts = bundle(cookies).practices;
   expect(facts.map((f) => f.storage?.count).sort()).toEqual([1, 1, 1, 2]);
   expect(new Set(facts.map((f) => f.factId)).size).toBe(4);
-  expect(JSON.stringify([cookies, facts])).not.toMatch(
+  expect(withoutNames([cookies, facts])).not.toMatch(
     /private|secret-user|123456|1700000/,
   );
   expect(
@@ -211,7 +215,7 @@ it("recognizes Meta cookie names only on facebook.com and drops private values a
       "same_site",
     ]),
   );
-  expect(JSON.stringify(jar)).not.toMatch(
+  expect(withoutNames(jar)).not.toMatch(
     /private-cookie-value|datr_backup|DATR/,
   );
 });
@@ -274,7 +278,7 @@ it("recognizes exact SDK cookie conventions while omitting private and lookalike
     "Chatwoot conversation",
     "Permutive visitor ID",
   ]);
-  expect(JSON.stringify(summary)).not.toMatch(
+  expect(withoutNames(summary)).not.toMatch(
     /cw_|permutive-id|PRIVATE|private-opaque/,
   );
 });
@@ -307,7 +311,47 @@ it("recognizes exact Google service cookie names only for google.com and drops t
     ]),
   );
   expect(jar.inspected).toBe(rows.length);
-  expect(JSON.stringify(jar)).not.toMatch(
+  expect(withoutNames(jar)).not.toMatch(
     /test-sensitive|other-account|__Secure-ENID/,
   );
+});
+
+it("keeps masked names and a value description for every inspected cookie", () => {
+  const cookies = summarizeBrowserCookies(
+    [
+      {
+        name: "wp_woocommerce_session_8f3a9b2c1d",
+        value: "a8f9c2e1b7d64f3a9e0c71d2",
+        domain: "shop.example",
+        expires: 2_000_000_000,
+        secure: true,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+      {
+        name: "theme",
+        value: "dark",
+        domain: "shop.example",
+        expires: -1,
+        secure: false,
+        httpOnly: false,
+        sameSite: "Lax",
+      },
+    ],
+    new URL("https://shop.example/"),
+    1_700_000_000,
+  );
+  expect(cookies.named).toEqual([
+    expect.objectContaining({
+      name: "wp_woocommerce_session_*",
+      persistent: true,
+      value: { length: "medium", shape: "hex", identifierLike: true },
+    }),
+    expect.objectContaining({
+      name: "theme",
+      persistent: false,
+      value: { length: "short", shape: "flag", identifierLike: false },
+    }),
+  ]);
+  expect(JSON.stringify(cookies)).not.toMatch(/a8f9c2e1|8f3a9b2c1d|"dark"/);
 });

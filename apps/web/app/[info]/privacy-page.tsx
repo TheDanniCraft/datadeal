@@ -107,10 +107,10 @@ export function PrivacyPage() {
             </p>
             <p>
               We send selected public policy text and browser measurements to
-              OpenAI to explain the findings. For example, the analysis can
-              identify that a request field resembled an email address. The
-              browser evidence sent for analysis excludes the address itself,
-              raw request bodies and cookie values.
+              Anthropic (Claude API) to explain the findings. For example, the
+              analysis can identify that a request field resembled an email
+              address. The browser evidence sent for analysis excludes the
+              address itself, raw request bodies and cookie values.
             </p>
             <p>
               We publish reports and cited evidence by domain and keep earlier

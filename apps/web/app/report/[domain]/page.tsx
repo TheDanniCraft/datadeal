@@ -164,7 +164,11 @@ export default async function ReportPage({
         }
       : undefined;
   const previousRewardedScan =
-    !advanced && scan === undefined && report && !report.demo && (session || previousGuests.length)
+    !advanced &&
+    scan === undefined &&
+    report &&
+    !report.demo &&
+    (session || previousGuests.length)
       ? await database?.previousRewardedScan(
           host,
           report.id,
@@ -183,6 +187,11 @@ export default async function ReportPage({
           .filter(
             (row, index) => index < 3 || (row.score != null && row.score < 60),
           ),
+      },
+      // Free readers see the five largest costs; the rest is advanced detail.
+      inventoryAssessment: rating.inventoryAssessment && {
+        ...rating.inventoryAssessment,
+        costs: rating.inventoryAssessment.costs.slice(0, 5),
       },
       adjustments: rating.adjustments.filter(
         (item, index) =>

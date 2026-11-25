@@ -1,5 +1,7 @@
 import { getDomain } from "tldts";
 import {
+  describeStorageValue,
+  maskStorageName,
   knownCookieName,
   isGoogleCookieFamily,
   storageInspectionLimit,
@@ -34,6 +36,7 @@ export function summarizeBrowserCookies(
   const site = getDomain(homepage.hostname, { allowPrivateDomains: true });
   const inspected = Math.min(cookies.length, storageInspectionLimit);
   const recognized: RecognizedCookie[] = [];
+  const named: NonNullable<BrowserStorageSnapshot["cookies"]["named"]> = [];
   const unclassified = new Map<string, UnclassifiedGroup>();
   for (const cookie of cookies.slice(0, inspected)) {
     // Never retain installation-specific suffixes, unknown names or cookie values.
@@ -94,6 +97,15 @@ export function summarizeBrowserCookies(
           : "unknown",
       persistent: cookie.expires > 0,
     };
+    named.push({
+      name: maskStorageName(cookie.name),
+      ...descriptor,
+      secure: cookie.secure,
+      httpOnly: cookie.httpOnly,
+      sameSite: cookie.sameSite,
+      // Only a coarse description of the value leaves this function.
+      value: describeStorageValue(cookie.value),
+    });
     if (!name.success) {
       const key = JSON.stringify(descriptor);
       const group = unclassified.get(key);
@@ -125,20 +137,52 @@ export function summarizeBrowserCookies(
     inspected,
     recognized,
     unclassified: [...unclassified.values()],
+    named,
   };
 }
 
-// Executed in the top-level page. Only counts and allowlisted categories leave it.
+export type WebStorageSample = { key: string; value: string };
+export type WebStorageInspection = {
+  summary: BrowserStorageSnapshot["web"];
+  samples?: { local: WebStorageSample[]; session: WebStorageSample[] };
+};
+
+/**
+ * Converts the in-page samples into masked names and value descriptions.
+ * Raw values stay in worker memory and are never returned or stored.
+ */
+export function describeWebStorage(
+  inspection: WebStorageInspection | undefined,
+): BrowserStorageSnapshot["web"] {
+  const summary = inspection?.summary;
+  if (!summary) return;
+  const describe = (rows: WebStorageSample[] = []) =>
+    rows.slice(0, storageInspectionLimit).map(({ key, value }) => ({
+      name: maskStorageName(key),
+      value: describeStorageValue(value),
+    }));
+  return {
+    local: { ...summary.local, keys: describe(inspection.samples?.local) },
+    session: {
+      ...summary.session,
+      keys: describe(inspection.samples?.session),
+    },
+  };
+}
+
+// Executed in the top-level page. Values are truncated and returned only to
+// the worker, which reduces them to coarse descriptions.
 export function inspectWebStorage({
   expectedOrigin,
   limit,
 }: {
   expectedOrigin: string;
   limit: number;
-}): BrowserStorageSnapshot["web"] {
+}): WebStorageInspection | undefined {
   if (location.origin !== expectedOrigin) return;
   try {
     const stores = [];
+    const samples: { key: string; value: string }[][] = [];
     for (const storage of [window.localStorage, window.sessionStorage]) {
       const total = storage.length;
       const inspected = Math.min(limit, total);
@@ -147,9 +191,14 @@ export function inspectWebStorage({
           BrowserStorageSnapshot["web"]
         >["local"]["categories"][number]
       >();
+      const rows: { key: string; value: string }[] = [];
       for (let i = 0; i < inspected; i++) {
         const key = storage.key(i);
         if (!key) continue;
+        rows.push({
+          key: key.slice(0, 200),
+          value: (storage.getItem(key) ?? "").slice(0, 512),
+        });
         // Default Google Conversion Linker and Mixpanel SDK persistence keys.
         if (key === "permutive-id" && storage === window.localStorage)
           categories.add("permutive_visitor_id");
@@ -165,8 +214,12 @@ export function inspectWebStorage({
         else categories.add("unclassified");
       }
       stores.push({ total, inspected, categories: [...categories].sort() });
+      samples.push(rows);
     }
-    return { local: stores[0], session: stores[1] };
+    return {
+      summary: { local: stores[0], session: stores[1] },
+      samples: { local: samples[0], session: samples[1] },
+    };
   } catch {
     return;
   }

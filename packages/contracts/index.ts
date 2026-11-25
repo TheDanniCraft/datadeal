@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { browserStorageSummary } from "./browser-storage";
+import { storageInventory } from "./storage-inventory";
 import { dataPractice, practiceScenario } from "./data-practice";
 export * from "./data-practice";
 export * from "./browser-storage";
@@ -338,6 +339,27 @@ const publishedScoring = z.object({
         .max(96),
     })
     .optional(),
+  // Scoring v2: what each classified storage item or recipient cost.
+  inventoryAssessment: z
+    .object({
+      coverage: z.string().min(1).max(900),
+      costs: z
+        .array(
+          z.object({
+            itemId: z.string().min(1).max(40),
+            label: z.string().min(1).max(400),
+            vendor: z.string().max(80).nullable(),
+            cost: z.number().min(0).max(100),
+            consentPenalty: z.boolean(),
+            reason: z.string().min(1).max(300),
+            evidenceIds: z.array(z.string()).max(8),
+          }),
+        )
+        .max(48),
+      classifiedItems: z.number().int().nonnegative(),
+      unknownItems: z.number().int().nonnegative(),
+    })
+    .optional(),
   adjustments: z.array(finding.extend({ adjustment: z.number().int() })),
   score: z.number().int().min(0).max(100).nullable(),
   grade: z.enum([
@@ -446,6 +468,8 @@ export const scanReport = z.object({
   acceptAllScoring: publishedScoring.optional(),
   rejectedScoring: publishedScoring.optional(),
   dataPractices: z.array(dataPractice).max(96).optional(),
+  // Scoring v2 input: value-free inventory classified by the analyst.
+  storageInventory: storageInventory.optional(),
   practiceCoverage: z
     .object({
       facts: z.number().int().nonnegative(),

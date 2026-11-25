@@ -1,5 +1,6 @@
 import {
   isAccessInterstitial,
+  describeWebStorage,
   inspectWebStorage,
   summarizeBrowserCookies,
   storageInspectionLimit,
@@ -174,7 +175,10 @@ async function storageSnapshot(
         expectedOrigin: homepage.origin,
         limit: storageInspectionLimit,
       })
-      .then((summary) => webStorageSummary.safeParse(summary).data)
+      .then(
+        (inspection) =>
+          webStorageSummary.safeParse(describeWebStorage(inspection)).data,
+      )
       .catch(() => undefined),
     matcher
       ? page

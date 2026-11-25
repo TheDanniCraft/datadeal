@@ -17,6 +17,13 @@ import {
 } from "@datadeal/contracts/content-page";
 
 import { grades, gradeForScore, methodologyVersion } from "./grades";
+import { inventoryRating } from "./inventory";
+export {
+  inventoryRating,
+  combineCosts,
+  inventoryCosts,
+  inventoryRulesRevision,
+} from "./inventory";
 export { grades, gradeForScore, methodologyVersion };
 export const rulesRevision = "browser-evidence-3";
 
@@ -113,6 +120,13 @@ export function verifiedRejectRating(report: ScanReport) {
 }
 
 export function calculateRejectScore(report: ScanReport) {
+  if (
+    report.consentCoverage?.rejected === "measured" &&
+    measuredHomepage(report, "rejected")?.url
+  ) {
+    const v2 = inventoryRating(report, "rejected");
+    if (v2) return v2;
+  }
   if (
     report.dataPractices === undefined ||
     report.consentCoverage?.rejected !== "measured"
@@ -279,6 +293,8 @@ export function adPersonalizationDisclosure(report: ScanReport) {
 }
 
 export function calculateScore(report: ScanReport): PublishedScoring {
+  const v2 = inventoryRating(report, "default");
+  if (v2) return v2;
   if (report.dataPractices !== undefined) {
     const homepage = measuredHomepage(report, "default");
     const rating = contextualRating(report, "default", homepage);
@@ -463,6 +479,8 @@ export function calculateAcceptAllScore(
     !measuredHomepage(report, "accepted")
   )
     return undefined;
+  const v2 = inventoryRating(report, "accepted");
+  if (v2) return v2;
   if (report.dataPractices !== undefined)
     return contextualRating(
       report,
