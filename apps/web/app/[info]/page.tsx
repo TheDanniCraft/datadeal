@@ -5,12 +5,11 @@ import { PrivacyPage } from "./privacy-page";
 import { getPricing } from "@datadeal/config";
 import { ConsentDialogLink } from "@c15t/nextjs";
 import { AdvertisingFaq, AdvertisingPrivacyHelp } from "./advertising-faq";
-import { Card } from "@heroui/react/card";
-import { buttonVariants } from "@heroui/styles/components/button";
 import { database } from "../../lib/reports";
 import { auth } from "../../lib/auth";
 import { billingConfig } from "../../lib/billing";
 import { proPlansPath } from "../../lib/checkout-return";
+import { PricingPlans } from "./pricing-plans";
 
 const pages = {
   methodology: [
@@ -47,10 +46,12 @@ export default async function InfoPage({
   if (info === "methodology") return <MethodologyPage />;
   const [title, summary] = pages[info as keyof typeof pages];
   const checkout = info === "pricing" && auth && database && billingConfig();
+  const pricing = getPricing();
   const formatPrice = (cents: number) =>
     new Intl.NumberFormat("en-IE", {
       style: "currency",
-      currency: getPricing().currency,
+      currency: pricing.currency,
+      ...(cents % 100 === 0 && { maximumFractionDigits: 0 }),
     }).format(cents / 100);
   return (
     <section
@@ -60,106 +61,64 @@ export default async function InfoPage({
           : "mx-auto max-w-3xl space-y-4 py-12 md:py-20 [&>h2]:mt-8 [&>h2]:text-2xl"
       }
     >
-      <h1 className="text-4xl leading-tight font-semibold tracking-tight md:text-6xl">
+      <h1
+        className={
+          "text-4xl leading-tight font-semibold tracking-tight md:text-6xl" +
+          (info === "pricing" ? " text-center" : "")
+        }
+      >
         {title}
       </h1>
-      <p className="mt-4 mb-7 max-w-2xl text-lg leading-relaxed text-muted">
+      <p
+        className={
+          "mt-4 mb-7 max-w-2xl text-lg leading-relaxed text-muted" +
+          (info === "pricing" ? " mx-auto mb-10 text-center" : "")
+        }
+      >
         {summary}
       </p>
       {info === "pricing" && (
         <>
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card className="p-5 md:p-8">
-              <Card.Content className="flex h-full flex-col items-start">
-                <Card.Title
-                  role="heading"
-                  aria-level={2}
-                  className="text-xl font-semibold"
-                >
-                  Free
-                </Card.Title>
-                <p className="mt-4 flex items-baseline gap-2 text-sm text-muted [&_strong]:text-5xl [&_strong]:tracking-tight [&_strong]:text-foreground">
-                  <strong>{formatPrice(0)}</strong>
-                  <span>forever</span>
-                </p>
-                <ul className="my-5 list-disc space-y-2 ps-5">
-                  <li>Privacy rating and verdict</li>
-                  <li>Key findings, warnings and sources</li>
-                  <li>Browser extension for quick checks</li>
-                </ul>
-                <Link
-                  className={buttonVariants({
-                    variant: "secondary",
-                    className: "mt-auto",
-                  })}
-                  href="/"
-                >
-                  Check a website
-                </Link>
-              </Card.Content>
-            </Card>
-            <Card className="border border-accent/30 bg-linear-to-br from-accent-soft to-surface p-5 md:p-8">
-              <Card.Content className="flex h-full flex-col items-start">
-                <Card.Title
-                  role="heading"
-                  aria-level={2}
-                  className="text-xl font-semibold"
-                >
-                  DataDeal Pro
-                </Card.Title>
-                <p className="mt-4 flex items-baseline gap-2 text-sm text-muted [&_strong]:text-5xl [&_strong]:tracking-tight [&_strong]:text-foreground">
-                  <strong>{formatPrice(getPricing().monthly)}</strong>
-                  <span>/ month</span>
-                </p>
-                <p className="mt-2 text-sm text-muted">
-                  Or {formatPrice(getPricing().yearly)} billed yearly. Renews
-                  automatically.
-                </p>
-                <ul className="my-5 list-disc space-y-2 ps-5">
-                  <li>Every available advanced report</li>
-                  <li>
-                    Interactive data flows, scan history and policy changes
-                  </li>
-                  <li>Ad-free browsing</li>
-                </ul>
-                {checkout ? (
-                  <Link
-                    className={buttonVariants({
-                      variant: "primary",
-                      className: "mt-auto",
-                    })}
-                    href={proPlansPath}
-                  >
-                    See subscription options
-                  </Link>
-                ) : (
-                  <p>Pro checkout is currently unavailable.</p>
-                )}
-              </Card.Content>
-            </Card>
-          </div>
-          <section className="flex flex-wrap items-center justify-between gap-4 border-b border-border py-6 [&_h2]:text-xl [&_p]:mt-2 [&_p]:max-w-prose [&_p]:text-muted">
-            <div>
-              <h2>One-domain unlock</h2>
-              <p>
-                When a rewarded ad is available, watch it to open one advanced
-                report. See the recorded consent choices, data flows and
-                providers for that domain. This browser can open the latest scan
-                for 24 hours. Sign in from this browser during that window to
-                keep the scan you unlocked in your account. Pro adds comparisons
-                with earlier scans and policy wording.
+          <PricingPlans
+            free={formatPrice(0)}
+            monthly={formatPrice(pricing.monthly)}
+            yearly={formatPrice(pricing.yearly)}
+            yearlyPerMonth={formatPrice(Math.floor(pricing.yearly / 12))}
+            savingPercent={Math.max(
+              0,
+              Math.floor(100 - (pricing.yearly / (pricing.monthly * 12)) * 100),
+            )}
+            checkoutHref={checkout ? proPlansPath : null}
+          />
+          <div className="mx-auto mt-6 grid w-full max-w-4xl gap-4 md:grid-cols-2">
+            <section className="grid content-start gap-2 rounded-3xl border border-separator p-6">
+              <h2 className="m-0! text-base font-semibold">
+                Unlock one report
+              </h2>
+              <p className="m-0! text-sm leading-relaxed text-muted">
+                Watch a short ad to open the advanced report for one domain for
+                24 hours. Sign in to keep it in your account.
               </p>
-            </div>
-            <Link className="inline-link" href="/advertising-disclosure">
-              How ads work ↗
-            </Link>
-          </section>
-          <p className="mt-4 text-sm text-muted">
-            Building with DataDeal?{" "}
-            <Link className="inline-link" href="/developers">
-              Explore the API and prepaid credits
-            </Link>
-          </p>
+              <Link
+                className="inline-link text-sm"
+                href="/advertising-disclosure"
+              >
+                How ads work
+              </Link>
+            </section>
+            <section className="grid content-start gap-2 rounded-3xl border border-separator p-6">
+              <h2 className="m-0! text-base font-semibold">
+                Building with DataDeal?
+              </h2>
+              <p className="m-0! text-sm leading-relaxed text-muted">
+                Query ratings and findings from your own tools with prepaid API
+                credits.
+              </p>
+              <Link className="inline-link text-sm" href="/developers">
+                Explore the API
+              </Link>
+            </section>
+          </div>
         </>
       )}
       {info === "learn" && (
