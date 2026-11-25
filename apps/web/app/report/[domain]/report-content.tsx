@@ -47,7 +47,6 @@ import {
   Button,
   Card,
   Chip,
-  Meter,
   Spinner,
 } from "@heroui/react";
 import { Timeline } from "@heroui-pro/react/timeline";
@@ -2388,32 +2387,42 @@ export function ReportContent({
         </div>
         {hasUsableReport && score && (
           <section
-            className="report-rating-summary col-start-3 row-start-1 grid justify-items-center gap-1 rounded-xl bg-[color-mix(in_oklab,var(--rating,var(--muted))_12%,var(--surface))] px-3 py-2 text-[var(--rating,var(--muted))] sm:px-4"
+            className="report-rating-summary col-span-full row-start-2 grid gap-2.5 rounded-2xl bg-[color-mix(in_oklab,var(--rating,var(--muted))_12%,var(--surface))] px-4 py-3 sm:col-span-1 sm:col-start-3 sm:row-start-1 sm:w-60 sm:self-start"
             data-rating={grade.toLowerCase()}
             aria-label="Privacy rating"
           >
             {score.score !== null ? (
               <>
-                <span className="text-xs font-medium text-muted">
-                  {headlineLabel}
-                </span>
-                <Meter
-                  value={score.score}
+                <div className="flex items-end justify-between gap-3">
+                  <p className="report-score-number m-0! flex items-baseline gap-0.5 text-[var(--rating,var(--muted))] tabular-nums">
+                    <strong className="text-4xl leading-none font-semibold tracking-tighter sm:text-5xl">
+                      {score.score}
+                    </strong>
+                    <span className="text-xs text-muted">/100</span>
+                  </p>
+                  <div className="grid gap-0.5 pb-0.5 text-right leading-tight">
+                    <span className="report-rating-band text-base font-semibold text-[var(--rating,var(--muted))]">
+                      {grade}
+                    </span>
+                    <span className="text-xs whitespace-nowrap text-muted">
+                      {headlineLabel}
+                    </span>
+                  </div>
+                </div>
+                <div
+                  role="meter"
                   aria-label="DataDeal privacy score"
-                  valueLabel={`${score.score} out of 100, ${grade}`}
-                  className="report-score-number flex items-baseline gap-0.5 tabular-nums"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={score.score}
+                  aria-valuetext={`${score.score} out of 100, ${grade}`}
+                  className="h-1.5 overflow-hidden rounded-full bg-[color-mix(in_oklab,var(--rating,var(--muted))_18%,transparent)]"
                 >
-                  <strong className="text-3xl leading-none font-semibold tracking-tighter sm:text-5xl">
-                    {score.score}
-                  </strong>
-                  <span className="text-xs text-muted">/100</span>
-                </Meter>
-                <p
-                  className="report-rating-band m-0! text-xs font-semibold"
-                  aria-hidden="true"
-                >
-                  {grade}
-                </p>
+                  <div
+                    className="h-full rounded-full bg-[var(--rating,var(--muted))]"
+                    style={{ width: Math.max(4, score.score) + "%" }}
+                  />
+                </div>
                 {!score.practiceAssessment &&
                   !score.inventoryAssessment &&
                   !report?.demo && (
@@ -2423,10 +2432,10 @@ export function ReportContent({
                   )}
               </>
             ) : (
-              <>
+              <div className="grid gap-0.5">
                 <span className="text-xs text-muted">Accept-all rating</span>
-                <h2>Unrated</h2>
-              </>
+                <h2 className="m-0! text-xl font-semibold">Unrated</h2>
+              </div>
             )}
           </section>
         )}
