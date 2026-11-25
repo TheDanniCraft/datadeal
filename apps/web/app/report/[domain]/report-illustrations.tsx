@@ -1,36 +1,19 @@
 import type { ReactNode } from "react";
 import { Button, Card, Disclosure, buttonVariants } from "@heroui/react";
-import { Timeline } from "@heroui-pro/react/timeline";
-import { LineChart } from "@heroui-pro/react/line-chart";
-import { ConsentTable } from "./consent-table";
 
 import { ReportIcon } from "./report-icon";
 
-const exampleVisits = [
-  { label: "Default", outside: 2, cookies: 3 },
-  { label: "Reject optional", outside: 1, cookies: 1 },
-  { label: "Accept optional", outside: 4, cookies: 6 },
-];
-const exampleHistory = [
-  { period: "Earlier scan", rating: 64 },
-  { period: "Policy update", rating: 68 },
-  { period: "Later scan", rating: 73 },
-];
-const exampleFindings = [
-  [
-    "Every provider",
-    "See who receives data and what the policy says about them.",
-  ],
-  ["Policy wording", "Read the exact passage behind each claim."],
-  ["Browser evidence", "Open the recorded visit behind each finding."],
-];
+import type { ProFeature } from "../../../lib/pro-features";
 
 export function AdvancedPreview({
   graph,
   reward,
+  features,
 }: {
   graph: ReactNode;
   reward?: ReactNode;
+  /** What the full report holds for this site, from its actual data. */
+  features: ProFeature[];
 }) {
   return (
     <Card
@@ -44,8 +27,7 @@ export function AdvancedPreview({
             Follow your data
           </h3>
           <p className="mt-2 max-w-80 text-sm leading-relaxed text-muted">
-            Explore recipient connections, compare consent choices and see what
-            changed between scans.
+            See every connection on a map and the evidence behind each finding.
           </p>
           <a
             className={buttonVariants({
@@ -68,82 +50,52 @@ export function AdvancedPreview({
         </figure>
       </Card.Content>
       {reward}
-      <Disclosure className="border-t border-separator">
-        <Disclosure.Heading>
-          <Button
-            slot="trigger"
-            variant="ghost"
-            className="flex min-h-12 w-full justify-between gap-3 rounded-none bg-surface-secondary/60 px-5 py-2 text-left sm:px-8"
-          >
-            <span className="inline-flex items-center gap-2 text-sm font-medium">
-              <ReportIcon name="glance" />
-              What&apos;s in the full report
-            </span>
-            <span className="inline-flex items-center gap-2 text-xs font-normal text-muted">
-              Sample <Disclosure.Indicator />
-            </span>
-          </Button>
-        </Disclosure.Heading>
-        <Disclosure.Content>
-          <Disclosure.Body className="report-preview-backdrop grid min-w-0 gap-6 border-t border-separator p-5 sm:grid-cols-2 sm:p-6">
-            <div className="min-w-0">
-              <h4 className="text-sm font-semibold">Consent comparison</h4>
-              <ConsentTable
-                label="Example consent measurements"
-                rows={exampleVisits}
-              />
-            </div>
-            <div className="min-w-0">
-              <h4 className="mb-2 text-sm font-semibold">
-                Providers and evidence
-              </h4>
-              <dl className="grid gap-2 text-sm">
-                {exampleFindings.map(([title, description]) => (
-                  <div key={title}>
-                    <dt className="font-medium">{title}</dt>
-                    <dd className="text-muted">{description}</dd>
-                  </div>
+      {features.length > 0 && (
+        <Disclosure className="border-t border-separator">
+          <Disclosure.Heading>
+            <Button
+              slot="trigger"
+              variant="ghost"
+              className="flex min-h-12 w-full justify-between gap-3 rounded-none bg-surface-secondary/60 px-5 py-2 text-left sm:px-8"
+            >
+              <span className="inline-flex items-center gap-2 text-sm font-medium">
+                <ReportIcon name="glance" />
+                What&apos;s in the full report
+              </span>
+              <span className="inline-flex items-center gap-2 text-xs font-normal text-muted">
+                {features.length} {features.length === 1 ? "part" : "parts"}{" "}
+                <Disclosure.Indicator />
+              </span>
+            </Button>
+          </Disclosure.Heading>
+          <Disclosure.Content>
+            <Disclosure.Body className="border-t border-separator p-5 sm:p-6">
+              <ul className="m-0 grid list-none gap-3 p-0 sm:grid-cols-2">
+                {features.map(({ label, detail }) => (
+                  <li key={label} className="flex gap-2.5 text-sm">
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 16 16"
+                      className="mt-0.5 size-4 shrink-0 text-accent"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3.5 8.5l3 3 6-7" />
+                    </svg>
+                    <span className="grid gap-0.5">
+                      <span className="font-medium">{label}</span>
+                      <span className="text-muted">{detail}</span>
+                    </span>
+                  </li>
                 ))}
-              </dl>
-            </div>
-            <div className="preview-timeline min-w-0">
-              <h4 className="mb-1 text-sm font-semibold">Scan history</h4>
-              <LineChart data={exampleHistory} height={62}>
-                <LineChart.Line
-                  dataKey="rating"
-                  name="Rating"
-                  stroke="var(--chart-2)"
-                  strokeWidth={2}
-                  dot={{ r: 2 }}
-                  isAnimationActive={false}
-                />
-              </LineChart>
-              <Timeline size="sm" density="compact">
-                {["Earlier scan", "Policy update", "Later scan"].map(
-                  (label) => (
-                    <Timeline.Item key={label}>
-                      <Timeline.Rail>
-                        <Timeline.Marker />
-                        <Timeline.Connector />
-                      </Timeline.Rail>
-                      <Timeline.Content>{label}</Timeline.Content>
-                    </Timeline.Item>
-                  ),
-                )}
-              </Timeline>
-            </div>
-            <div className="min-w-0 sm:col-span-2">
-              <h4 className="mb-2 text-sm font-semibold">Policy change</h4>
-              <dl className="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[auto_1fr]">
-                <dt className="font-medium">Previous wording</dt>
-                <dd>“We keep booking details for one year.”</dd>
-                <dt className="font-medium">Revised wording</dt>
-                <dd>“We keep booking details for 30 days.”</dd>
-              </dl>
-            </div>
-          </Disclosure.Body>
-        </Disclosure.Content>
-      </Disclosure>
+              </ul>
+            </Disclosure.Body>
+          </Disclosure.Content>
+        </Disclosure>
+      )}
     </Card>
   );
 }

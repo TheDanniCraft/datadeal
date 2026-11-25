@@ -372,11 +372,47 @@ describe("jurisdiction, hosting and policy", () => {
   });
 
   test("a missing privacy policy costs 15 and is named in the verdict", () => {
-    const r = rate(inventory([]), "accepted", { ...withPolicy, findings: [] });
+    const notFound = {
+      id: "policy-not-found",
+      kind: "unknown",
+      scanId,
+      excerpt: "No privacy policy was found.",
+      retrievedAt: new Date(0).toISOString(),
+    };
+    const unread = rate(inventory([]), "accepted", {
+      ...withPolicy,
+      findings: [],
+      evidence: [{ ...notFound, id: "coverage" }],
+    });
+    expect(unread.inventoryAssessment?.costs).toEqual([]);
+    const r = rate(inventory([]), "accepted", {
+      ...withPolicy,
+      findings: [],
+      evidence: [notFound],
+    });
     expect(r.inventoryAssessment?.costs[0]).toMatchObject({
       itemId: "policy-missing",
       cost: 15,
     });
     expect(r.verdict).toMatch(/No privacy policy found\.$/);
   });
+});
+
+test("a vendor takes the majority jurisdiction of its items", () => {
+  const a = recipient("a.example", { fields: ["identifier"] });
+  const b = storage("vendor_id", id);
+  const c = storage("vendor_seg", id);
+  const tag = (item: { id: string }, jurisdiction: "eu" | "non_eu") => ({
+    ...classify(item, "advertising", "independent"),
+    vendor: "Vendor",
+    jurisdiction,
+  });
+  const r = rate(
+    inventory([
+      [a, tag(a, "eu")],
+      [b, tag(b, "eu")],
+      [c, tag(c, "non_eu")],
+    ]),
+  );
+  expect(r.inventoryAssessment?.costs.every((x) => !x.outsideEu)).toBe(true);
 });

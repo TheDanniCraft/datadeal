@@ -12,6 +12,7 @@ import {
   verifiedRejectRating,
 } from "@datadeal/scoring";
 import { changedScoreDrivers, documentChanges } from "../../../lib/history";
+import { proFeatures } from "../../../lib/pro-features";
 import { compareVisitDestinations } from "../../../lib/visit-history";
 import { comparePolicyDisclosures } from "../../../lib/policy-history";
 import { practiceTakeaways } from "../../../lib/practice-takeaways";
@@ -381,6 +382,16 @@ export default async function ReportPage({
   return (
     <article className="privacy-report mx-auto w-full max-w-[50rem] py-6 sm:py-9">
       <ReportContent
+        proFeatures={
+          advanced
+            ? []
+            : proFeatures(
+                report,
+                score,
+                sampledPages?.pages.length ?? 0,
+                history.length,
+              )
+        }
         host={host}
         report={displayedReport}
         consentDifference={advanced ? consentDifference : undefined}

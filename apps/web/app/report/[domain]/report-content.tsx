@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { AdvancedPreview } from "./report-illustrations";
+import type { ProFeature } from "../../../lib/pro-features";
 import { ReportIcon } from "./report-icon";
 import { combineCosts, reportSignals } from "@datadeal/scoring";
 import { ReportSignalIcons } from "./report-signals";
@@ -1863,6 +1864,7 @@ function ScoreHistoryChart({
 }
 
 export function ReportContent({
+  proFeatures = [],
   host,
   report,
   score,
@@ -1896,6 +1898,8 @@ export function ReportContent({
   changes,
   comparison,
 }: {
+  /** Counted on the server from the full scan, for the Pro preview. */
+  proFeatures?: ProFeature[];
   host: string;
   report?: ScanReport;
   score: Score | null;
@@ -2374,9 +2378,12 @@ export function ReportContent({
   const rejectedScore = rejectedVisit && report?.rejectedScoring;
   const signals =
     report && score?.score != null ? reportSignals(report, score) : undefined;
-  const headlineLabel = score?.noChoiceEvidence
-    ? noChoiceVisitLabel
-    : ratingLabels[headlineScenario];
+  const headlineLabel =
+    score?.noChoiceEvidence || score?.headlineBasis === "no_choice_offered"
+      ? noChoiceVisitLabel
+      : score?.headlineBasis === "accept_untested"
+        ? "Before any choice"
+        : ratingLabels[headlineScenario];
   const scenarioRatings = [
     {
       scenario: "default" as const,
@@ -2991,6 +2998,7 @@ export function ReportContent({
                   )}
                   {advancedAvailable && (
                     <AdvancedPreview
+                      features={proFeatures}
                       graph={
                         <Flow
                           host="Example site"

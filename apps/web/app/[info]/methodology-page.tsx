@@ -120,10 +120,10 @@ export function MethodologyPage() {
             {missingPolicyCost} points.
           </p>
           <p>
-            The headline score rates the visit after you accept all cookies.
-            When part of the site could not be tested, the score moves toward
-            the middle of the scale, because we can&apos;t vouch for what we
-            didn&apos;t see.
+            The headline score rates the visit after you accept all cookies, or
+            the visit before any choice when a site offers none. When part of
+            the site could not be tested, the score moves toward the middle of
+            the scale, because we can&apos;t vouch for what we didn&apos;t see.
           </p>
         </div>
         <Accordion className="mt-4">
@@ -161,17 +161,19 @@ export function MethodologyPage() {
           <Accordion.Item id="coverage">
             <Accordion.Heading>
               <Accordion.Trigger>
-                When a site stays unrated
+                When a site can&apos;t be rated
                 <Accordion.Indicator />
               </Accordion.Trigger>
             </Accordion.Heading>
             <Accordion.Panel>
               <Accordion.Body className="max-w-prose space-y-3 text-foreground">
                 <p>
-                  We need a completed visit with a working &ldquo;Accept
-                  all&rdquo; button. Without one, the report still shows what we
-                  found but doesn&apos;t give a number. A missing privacy policy
-                  doesn&apos;t stop the rating; it costs points instead.
+                  We need a completed visit to the homepage. If the site offers
+                  no cookie choice, we rate what every visitor gets. If it has a
+                  cookie banner we couldn&apos;t operate, we rate the visit
+                  before any choice and move the score toward the middle. A
+                  missing privacy policy doesn&apos;t stop the rating; it costs
+                  points instead.
                 </p>
                 <p>
                   What happens after you sign in, or on the company&apos;s

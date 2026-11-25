@@ -52,6 +52,7 @@ const scenarioPhases: Record<Scenario, InventoryPhase[]> = {
 export const breadth = { perDoubling: 6, cap: 30, unit: 10 } as const;
 /** How much of the distance from 50 the coverage of a scan supports. */
 export const coverageWeights = {
+  acceptUntested: 0.85,
   rejectUntested: 0.93,
   homepageOnly: 0.9,
   oneSampledPage: 0.94,
@@ -172,10 +173,17 @@ export function scanCoverage(
   report: Partial<CoverageInput>,
   inventory: StorageInventory,
   unknownShare: number,
+  acceptUntested = false,
 ) {
   const w = coverageWeights;
   const reasons: string[] = [];
   let c = 1;
+  if (acceptUntested) {
+    c *= w.acceptUntested;
+    reasons.push(
+      "the Accept all option couldn't be tested, so this rates the visit before any choice",
+    );
+  }
   if (report.consentCoverage?.rejected !== "measured") {
     c *= w.rejectUntested;
     reasons.push("the reject option couldn't be tested");
@@ -223,6 +231,22 @@ export function inventoryCostsFor(
 ): Cost[] {
   const phases = scenarioPhases[scenario];
   const byId = new Map(inventory.classifications.map((c) => [c.itemId, c]));
+  // One company, one answer: the classifier judges items one by one, so a
+  // vendor takes the majority of its items' jurisdictions.
+  const votes = new Map<string, { eu: number; non_eu: number }>();
+  for (const c of inventory.classifications) {
+    if (!c.vendor || !c.jurisdiction || c.jurisdiction === "unknown") continue;
+    const key = c.vendor.toLowerCase();
+    const vote = votes.get(key) ?? { eu: 0, non_eu: 0 };
+    vote[c.jurisdiction]++;
+    votes.set(key, vote);
+  }
+  const jurisdictionOf = (c?: InventoryClassification) => {
+    const vote = c?.vendor && votes.get(c.vendor.toLowerCase());
+    if (vote && vote.eu !== vote.non_eu)
+      return vote.non_eu > vote.eu ? "non_eu" : "eu";
+    return c?.jurisdiction;
+  };
   const costs: Cost[] = [];
   const add = (
     item: StorageItem | RecipientItem,
@@ -234,7 +258,7 @@ export function inventoryCostsFor(
     const withoutConsent =
       base > 0 &&
       item.phases.some((p) => p === "before_choice" || p === "after_reject");
-    const outsideEu = base > 0 && c?.jurisdiction === "non_eu";
+    const outsideEu = base > 0 && jurisdictionOf(c) === "non_eu";
     costs.push({
       itemId: item.id,
       label,
@@ -299,7 +323,10 @@ export function inventoryCostsFor(
   }
   if (
     report?.findings &&
-    !report.findings.some(({ rule }) => rule === "policy_available")
+    !report.findings.some(({ rule }) => rule === "policy_available") &&
+    report.evidence?.some(
+      (e) => e.scanId === report.id && e.id === "policy-not-found",
+    )
   )
     costs.push({
       itemId: "policy-missing",
@@ -311,7 +338,7 @@ export function inventoryCostsFor(
       kind: "policy",
       reason:
         "We couldn't find a privacy policy, which EU law requires. Nothing explains what the site does with your data.",
-      evidenceIds: [],
+      evidenceIds: ["policy-not-found"],
       unknown: false,
     });
   return costs.sort((a, b) => b.cost - a.cost);
@@ -351,6 +378,7 @@ export function inventoryRating(
     Partial<CoverageInput> &
     Partial<HostingInput>,
   scenario: Scenario,
+  options: { acceptUntested?: boolean } = {},
 ): PublishedScoring | undefined {
   const inventory = report.storageInventory;
   if (!inventory) return undefined;
@@ -364,6 +392,7 @@ export function inventoryRating(
     report,
     inventory,
     costs.length ? unknown / costs.length : 0,
+    options.acceptUntested,
   );
   const score = Math.round(50 + (raw - 50) * coverage);
   const confidence =

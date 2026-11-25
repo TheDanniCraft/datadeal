@@ -6,7 +6,7 @@ export const scenarioLabel = {
   rejected: "After rejecting optional consent",
   accepted: "After accepting all",
 } as const;
-export const noChoiceVisitLabel = "No choice detected";
+export const noChoiceVisitLabel = "No cookie choice offered";
 
 const citationIds = z.array(z.string().min(1).max(160)).max(8);
 export const practicePurpose = z.enum([

@@ -600,13 +600,19 @@ export async function scan(
       evidenceIds: [privacySource],
     });
   } else {
+    // A linked policy we could not read is our gap, not the site's; only a
+    // site with no privacy link anywhere counts as having no policy.
+    const linked = [...homeLinks, ...sitemap.documents].some(
+      ({ kind }) => kind === "privacy",
+    );
     evidence.push({
-      id: "coverage",
+      id: linked ? "coverage" : "policy-not-found",
       kind: "unknown",
       scanId: id,
       retrievedAt: new Date().toISOString(),
-      excerpt:
-        "The scanner could not verify a readable privacy policy from its homepage, legal directories, sitemap, or common policy addresses. Policies at other addresses or linked only after scripts run may have been missed.",
+      excerpt: linked
+        ? "The site links to a privacy policy, but the scanner couldn't read it."
+        : "No privacy policy was found on the homepage, in legal directories, the sitemap or common policy addresses.",
     });
     findings.push({
       rule: "missing_information",
@@ -615,7 +621,7 @@ export async function scan(
         "Review the website’s current policy before submitting personal information.",
       confidence: "low",
       severity: "caution",
-      evidenceIds: ["coverage"],
+      evidenceIds: [linked ? "coverage" : "policy-not-found"],
     });
   }
   return {

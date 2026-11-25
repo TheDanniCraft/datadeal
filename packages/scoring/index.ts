@@ -262,6 +262,35 @@ function unratedAcceptAllVerdict(
   }
 }
 
+/**
+ * When "Accept all" could not be measured, rate the visit the scanner did
+ * record instead of leaving the site unrated. Without any consent tool that
+ * visit is what everyone gets; with one, the untested part pulls the score
+ * toward the middle.
+ */
+function beforeChoiceHeadline(
+  report: ScanReport,
+): PublishedScoring | undefined {
+  if (
+    !liveInventory(report) ||
+    !ratable(report) ||
+    report.consentCoverage?.default !== "measured" ||
+    report.consentCoverage?.accepted === "measured"
+  )
+    return;
+  const consentTool = report.storageInventory!.classifications.some(
+    ({ purpose }) => purpose === "consent",
+  );
+  const rating = inventoryRating(report, "default", {
+    acceptUntested: consentTool,
+  });
+  if (rating?.score == null) return;
+  return {
+    ...rating,
+    headlineBasis: consentTool ? "accept_untested" : "no_choice_offered",
+  };
+}
+
 /** A verified no-choice visitor scope is distinct from a measured opt-in. */
 export function evaluateHeadline(report: ScanReport): {
   rating: PublishedScoring;
@@ -280,6 +309,8 @@ export function evaluateHeadline(report: ScanReport): {
     report.consentCoverage?.accepted === "control_unavailable"
   )
     return { rating: saved, scenario: "default" };
+  const beforeChoice = beforeChoiceHeadline(report);
+  if (beforeChoice) return { rating: beforeChoice, scenario: "default" };
   return {
     scenario: "accepted",
     rating: {

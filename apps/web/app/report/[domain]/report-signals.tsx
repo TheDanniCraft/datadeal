@@ -7,18 +7,15 @@ import { ReportIcon } from "./report-icon";
 
 type Signal = {
   key: string;
-  icon: Parameters<typeof ReportIcon>[0]["name"];
+  icon?: Parameters<typeof ReportIcon>[0]["name"];
   label: string;
   tone: string;
   text?: string;
 };
 
-const tones = {
-  neutral: "bg-default text-muted",
-  good: "bg-success/12 text-success",
-  warn: "bg-warning/15 text-warning",
-  bad: "bg-danger/12 text-danger",
-};
+// One neutral style: the icon and its tooltip carry the meaning, not colour.
+const neutral = "text-foreground";
+const tones = { neutral, good: neutral, warn: neutral, bad: neutral };
 
 export function signalList(signals: ReportSignals): Signal[] {
   const list: Signal[] = [
@@ -29,12 +26,20 @@ export function signalList(signals: ReportSignals): Signal[] {
           label: "Rated after accepting all cookies",
           tone: tones.neutral,
         }
-      : {
-          key: "scenario",
-          icon: "noChoice",
-          label: "No cookie choice offered; rated as every visitor sees it",
-          tone: tones.neutral,
-        },
+      : signals.scenario === "before_choice"
+        ? {
+            key: "scenario",
+            icon: "hourglass",
+            label:
+              "Rated before any cookie choice: Accept all couldn't be tested",
+            tone: tones.neutral,
+          }
+        : {
+            key: "scenario",
+            icon: "cookieOff",
+            label: "No cookie choice offered; rated as every visitor sees it",
+            tone: tones.neutral,
+          },
   ];
   if (signals.noPolicy)
     list.push({
@@ -46,14 +51,14 @@ export function signalList(signals: ReportSignals): Signal[] {
   if (signals.beforeChoice)
     list.push({
       key: "before",
-      icon: "clock",
+      icon: "eye",
       label: "Tracking starts before you choose",
       tone: tones.warn,
     });
   if (signals.advertising)
     list.push({
       key: "ads",
-      icon: "megaphone",
+      icon: "target",
       label: "Advertising or profiling IDs",
       tone: tones.bad,
     });
@@ -61,8 +66,8 @@ export function signalList(signals: ReportSignals): Signal[] {
     const european = isEuropean(signals.host.country);
     list.push({
       key: "host",
-      icon: "server",
-      text: signals.host.country || undefined,
+      // Just the region as text: EU, or the country code outside Europe.
+      text: european ? "EU" : signals.host.country || "?",
       label:
         `Hosted by ${signals.host.name}` +
         (signals.host.country ? ` (${signals.host.country})` : "") +
@@ -84,11 +89,11 @@ function Badge({ signal }: { signal: Signal }) {
   return (
     <span
       className={
-        "inline-flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-md px-1 text-[.68rem] font-semibold [&_svg]:size-3.5 " +
+        "inline-flex h-5 items-center gap-0.5 text-[.68rem] font-semibold [&_svg]:size-4 " +
         signal.tone
       }
     >
-      <ReportIcon name={signal.icon} />
+      {signal.icon && <ReportIcon name={signal.icon} />}
       {signal.text}
     </span>
   );
@@ -111,7 +116,7 @@ export function ReportSignalIcons({
   const list = signalList(signals);
   return (
     <ul
-      className={"m-0! flex list-none flex-wrap gap-1 p-0! " + className}
+      className={"m-0! flex list-none flex-wrap gap-2.5 p-0! " + className}
       aria-label="Report highlights"
     >
       {list.map((signal) =>

@@ -6,7 +6,7 @@ import {
 
 /** At-a-glance facts about a rated report, shown as icons. */
 export type ReportSignals = {
-  scenario: "accepted" | "no_choice";
+  scenario: "accepted" | "no_choice" | "before_choice";
   beforeChoice: boolean;
   advertising: boolean;
   outsideEu: boolean;
@@ -34,7 +34,12 @@ export function reportSignals(
   const host =
     hosting?.type === "hosting" ? (hosting.cdn ?? hosting.host) : undefined;
   return {
-    scenario: rating.noChoiceEvidence ? "no_choice" : "accepted",
+    scenario:
+      rating.noChoiceEvidence || rating.headlineBasis === "no_choice_offered"
+        ? "no_choice"
+        : rating.headlineBasis === "accept_untested"
+          ? "before_choice"
+          : "accepted",
     beforeChoice: costs.some((c) => c.consentPenalty && c.cost > 0),
     advertising: costs.some((c) =>
       advertisingPurposes.has(classified.get(c.itemId)?.purpose ?? ""),

@@ -367,6 +367,9 @@ export const finding = z.object({
 });
 const publishedScoring = z.object({
   methodologyVersion: z.string().min(1),
+  // Set when the headline rates the visit before any choice because
+  // "Accept all" could not be measured.
+  headlineBasis: z.enum(["no_choice_offered", "accept_untested"]).optional(),
   rulesRevision: z.string().min(1).max(64).optional(),
   noChoiceEvidence: z
     .object({
