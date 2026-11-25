@@ -110,17 +110,13 @@ function DisplaySlot({
             : "right-[calc(50%-25rem-160px-2rem)]")
         }
       >
-        <small className="text-xs text-muted">
-          {testAd ? "Google sample ad" : "Advertisement"}
-        </small>
+        <small className="text-xs text-muted">Advertisement</small>
         <div id={id} ref={slot} className="mt-1 min-h-[600px]" />
       </aside>
     );
   return (
     <aside className="my-6" aria-label="Advertisement">
-      <small className="text-sm text-muted">
-        {testAd ? "Google sample ad" : "Advertisement"}
-      </small>
+      <small className="text-sm text-muted">Advertisement</small>
       <div id={id} ref={slot} className="mt-1 flex justify-center" />
     </aside>
   );

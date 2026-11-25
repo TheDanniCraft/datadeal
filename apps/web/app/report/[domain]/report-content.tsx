@@ -2602,8 +2602,7 @@ export function ReportContent({
               className="my-5 rounded-lg bg-surface p-4"
               aria-label="Advertisement placement preview"
             >
-              <small>Advertisement placement preview</small>
-              <p>Google Ad Manager display placement</p>
+              <small>Advertisement</small>
             </aside>
           )}
           {!advanced && (

@@ -143,8 +143,8 @@ function TestOffer({
       window.clearTimeout(timeout);
       if (displayed) return;
       displayed = event.makeRewardedVisible();
-      if (!displayed) stop("The test ad could not open.", true);
-      else setNotice("The Google sample ad is open.");
+      if (!displayed) stop("The ad could not open. Try again later.", true);
+      else setNotice("The ad is open.");
     };
     const onGrant = (event: Events["rewardedSlotGranted"]) => {
       if (active && displayed && event.slot === slot) granted = true;
@@ -391,7 +391,7 @@ export function RewardedAdTest({
             <p className="mt-1 mb-0 max-w-prose text-sm leading-relaxed text-muted">
               {consent === "privacy-signal"
                 ? "You can choose limited advertising in Privacy settings when it is available."
-                : "Finish a Google sample ad for 24-hour access, including rescans."}
+                : "Watch a short ad for 24-hour access, including rescans."}
             </p>
           </div>
           {consent === "allowed" || consent === "limited" ? (

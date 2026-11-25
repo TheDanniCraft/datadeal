@@ -205,10 +205,6 @@ export async function BillingView({
             <p>Pro checkout is currently unavailable.</p>
           ) : (
             <>
-              {checkout.mode === "test" &&
-                process.env.NODE_ENV !== "production" && (
-                  <p>Sandbox checkout is available for testing.</p>
-                )}
               <CheckoutButtons
                 monthly={format.format(pricing.monthly / 100)}
                 yearly={format.format(pricing.yearly / 100)}
