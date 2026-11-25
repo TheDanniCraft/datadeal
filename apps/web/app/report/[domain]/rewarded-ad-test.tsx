@@ -7,9 +7,7 @@ import {
 import {
   Button,
   Disclosure,
-  Label,
-  Radio,
-  RadioGroup,
+  Modal,
   Spinner,
   buttonVariants,
 } from "@heroui/react";
@@ -52,7 +50,6 @@ import {
   defaultReportPointCost,
   guaranteedPoints,
 } from "@datadeal/contracts/paper-plane";
-import { FlightOdds } from "../../rewards/flight-odds";
 function TestOffer({
   host,
   scanId,
@@ -66,7 +63,8 @@ function TestOffer({
   game: boolean;
   signedIn: boolean;
 }) {
-  const [choice, setChoice] = useState("unlock");
+  const [choice, setChoice] = useState<"unlock" | "choice">("unlock");
+  const [chooserOpen, setChooserOpen] = useState(false);
   const [intent, setIntent] = useState("");
   const [requested, setRequested] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -122,7 +120,7 @@ function TestOffer({
         stop(
           {
             loading_tag:
-              "The Google ad service did not finish loading. A video request could not be confirmed.",
+              "Your browser or an extension blocked Google’s ad service, so no video could load. Firefox’s tracking protection does this even after you accept ads here. You can allow it for this site with the shield icon in the address bar, or get the report with Pro.",
             waiting_for_request:
               "The ad service loaded but did not confirm sending a video request.",
             requested:
@@ -200,7 +198,10 @@ function TestOffer({
       tag.display(slot);
     });
     const failed = () =>
-      stop("The Google test ad script could not load.", true);
+      stop(
+        "Your browser or an extension blocked Google’s ad script. You can allow it for this site (in Firefox: the shield icon in the address bar), or get the report with Pro.",
+        true,
+      );
     script.addEventListener("error", failed, { once: true });
     if (!script.isConnected) document.head.append(script);
     return () => {
@@ -216,6 +217,30 @@ function TestOffer({
       if (slot) tag.destroySlots([slot]);
     };
   }, [requested, saveReward, limited, intent]);
+  const start = async (offer: "unlock" | "choice") => {
+    setChooserOpen(false);
+    setChoice(offer);
+    setNotice("");
+    if (game) {
+      setSaving(true);
+      try {
+        const response = await fetch("/api/v1/rewards/offers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "reserve", offer, host, scanId }),
+        });
+        if (!response.ok) throw Error();
+        setIntent((await response.json()).id);
+      } catch {
+        setNotice("This reward could not be reserved. Try again.");
+        return;
+      } finally {
+        setSaving(false);
+      }
+    }
+    setRequested(true);
+  };
+  const returnTo = "/report/" + encodeURIComponent(host);
   return (
     <>
       {!unavailable && (
@@ -224,36 +249,9 @@ function TestOffer({
           size="sm"
           className="min-h-11 w-full gap-2 sm:col-start-2 sm:row-start-1 sm:w-auto sm:self-center"
           isDisabled={requested || saving}
-          onPress={async () => {
-            if (retryId) {
-              void saveReward(retryId);
-              return;
-            }
-            setNotice("");
-            if (game) {
-              setSaving(true);
-              try {
-                const response = await fetch("/api/v1/rewards/offers", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    action: "reserve",
-                    offer: choice,
-                    host,
-                    scanId,
-                  }),
-                });
-                if (!response.ok) throw Error();
-                setIntent((await response.json()).id);
-              } catch {
-                setNotice("This reward could not be reserved. Try again.");
-                return;
-              } finally {
-                setSaving(false);
-              }
-            }
-            setRequested(true);
-          }}
+          onPress={() =>
+            retryId ? void saveReward(retryId) : setChooserOpen(true)
+          }
         >
           {requested || saving ? (
             <Spinner size="sm" color="current" aria-hidden="true" />
@@ -268,80 +266,100 @@ function TestOffer({
                 ? choice === "unlock"
                   ? "Retry unlock"
                   : "Retry reward"
-                : choice === "unlock"
-                  ? "Watch an ad to unlock"
-                  : choice === "points"
-                    ? `Watch an ad for ${guaranteedPoints} points`
-                    : choice === "flight"
-                      ? "Watch an ad for a flight"
-                      : "Watch an ad, then choose"}
+                : "Watch an ad to unlock"}
         </Button>
       )}
-      {game && !unavailable && (
-        <Disclosure className="min-w-0 sm:contents">
-          <Disclosure.Heading className="flex justify-center sm:col-start-2 sm:row-start-2">
-            <Button
-              slot="trigger"
-              size="sm"
-              variant="ghost"
-              className="min-h-10 gap-1.5 px-2 text-xs font-medium text-muted hover:text-foreground"
-            >
-              Choose your reward <Disclosure.Indicator />
-            </Button>
-          </Disclosure.Heading>
-          <Disclosure.Content className="sm:col-span-2">
-            <Disclosure.Body className="grid min-w-0 gap-3 border-t border-separator pt-4 text-sm">
-              <RadioGroup
-                name="ad-reward"
-                value={choice}
-                onChange={setChoice}
-                isDisabled={requested || saving || Boolean(retryId)}
-              >
-                <Label>One completed ad earns one reward</Label>
-                {(signedIn
-                  ? [
-                      ["unlock", "Open this domain for 24 hours"],
-                      ["points", "Save " + guaranteedPoints + " report points"],
-                      ["flight", "Try a flight for 0–1,000 points"],
-                    ]
-                  : [
-                      ["unlock", "Open this domain for 24 hours"],
-                      ["choice", "Choose after the ad"],
-                    ]
-                ).map(([value, label]) => (
-                  <Radio key={value} value={value} className="min-h-10">
-                    <Radio.Content>
-                      <Radio.Control>
-                        <Radio.Indicator />
-                      </Radio.Control>
-                      {label}
-                    </Radio.Content>
-                  </Radio>
-                ))}
-              </RadioGroup>
-              {choice === "unlock" && (
-                <p className="m-0">
-                  Sign in within the 24-hour window to keep this scan in your
-                  account.
-                </p>
+      <Modal.Backdrop isOpen={chooserOpen} onOpenChange={setChooserOpen}>
+        <Modal.Container size="lg">
+          <Modal.Dialog className="min-w-0">
+            <Modal.CloseTrigger aria-label="Close" />
+            <Modal.Header>
+              <Modal.Heading>Unlock the full report for {host}</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              {signedIn ? (
+                <div className="grid gap-4">
+                  <p className="m-0 text-sm leading-relaxed text-muted">
+                    Watch one short ad. Afterwards you choose one reward:
+                  </p>
+                  <ul className="m-0! grid list-none gap-2 p-0!">
+                    {[
+                      [
+                        "Keep this report",
+                        "This scan stays in your account for good. A newer scan of the site needs a new unlock.",
+                      ],
+                      [
+                        guaranteedPoints + " points",
+                        "Enough for one report unlock later, on any site.",
+                      ],
+                      [
+                        "Paper-plane flight",
+                        "Collect before the plane flies away for 1–1,000 points, or miss and get nothing.",
+                      ],
+                    ].map(([title, text]) => (
+                      <li
+                        key={title}
+                        className="rounded-xl border border-separator p-3"
+                      >
+                        <p className="m-0 font-medium">{title}</p>
+                        <p className="m-0 text-sm text-muted">{text}</p>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    className="min-h-11"
+                    onPress={() => void start(game ? "choice" : "unlock")}
+                  >
+                    <ReportIcon name="play" /> Watch the ad
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <section className="grid content-between gap-4 rounded-xl border border-separator p-4">
+                    <div>
+                      <h3 className="m-0 text-base font-semibold">
+                        Continue as guest
+                      </h3>
+                      <p className="mt-1 mb-0 text-sm leading-relaxed text-muted">
+                        Watch one ad and open this report in this browser for 24
+                        hours, including new scans in that time. No account
+                        needed.
+                      </p>
+                    </div>
+                    <Button
+                      variant="secondary"
+                      className="min-h-11"
+                      onPress={() => void start("unlock")}
+                    >
+                      <ReportIcon name="play" /> Watch as guest
+                    </Button>
+                  </section>
+                  <section className="grid content-between gap-4 rounded-xl border border-accent/40 bg-accent/5 p-4">
+                    <div>
+                      <h3 className="m-0 text-base font-semibold">
+                        Sign in to keep it
+                      </h3>
+                      <p className="mt-1 mb-0 text-sm leading-relaxed text-muted">
+                        Save this version of the report to your account for
+                        good. After the ad you can instead take{" "}
+                        {guaranteedPoints} points or try a paper-plane flight.
+                      </p>
+                    </div>
+                    <a
+                      className={buttonVariants({
+                        className: "min-h-11 w-full",
+                      })}
+                      href={"/account?returnTo=" + encodeURIComponent(returnTo)}
+                    >
+                      Sign in with email
+                    </a>
+                  </section>
+                </div>
               )}
-              {choice === "choice" && (
-                <p className="m-0">
-                  After the ad, open this report or sign in for a flight. You
-                  have 30 days to claim your reward in this browser.
-                </p>
-              )}
-              {(choice === "flight" || choice === "choice") && <FlightOdds />}
-              {choice === "points" && (
-                <p className="m-0">
-                  Points stay in your account. Keeping a scan costs{" "}
-                  {defaultReportPointCost} points in this local trial.
-                </p>
-              )}
-            </Disclosure.Body>
-          </Disclosure.Content>
-        </Disclosure>
-      )}
+            </Modal.Body>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
       {notice && (
         <p role="status" className="m-0 text-sm leading-relaxed sm:col-span-2">
           {notice}

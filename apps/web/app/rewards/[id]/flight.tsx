@@ -103,36 +103,71 @@ export function Flight({
       </header>
       {reward.state === "choose" ? (
         <section className="space-y-4">
-          <h2 className="text-xl">Choose how to use your reward</h2>
-          <p>
-            Open the advanced report for {reward.domain} in this browser for 24
-            hours, including rescans. You can also use this reward for one
-            account flight.
-          </p>
-          <Button
-            onPress={() => void send("open")}
-            isDisabled={!interactive || busy}
-          >
-            Open report for 24 hours
-          </Button>
-          <div>
-            {signedIn ? (
+          <h2 className="text-xl">Your ad is done. Choose one reward</h2>
+          {signedIn ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {(
+                [
+                  [
+                    "open",
+                    "Keep this report",
+                    `The full report for ${reward.domain} stays in your account for good. A newer scan needs a new unlock.`,
+                    "Keep report",
+                  ],
+                  [
+                    "choosePoints",
+                    "Claim 50 points",
+                    "Points stay in your wallet. 50 points unlock any report later.",
+                    "Claim points",
+                  ],
+                  [
+                    "chooseFlight",
+                    "Fly the paper plane",
+                    "Collect before it flies away for 1–1,000 points. Miss it and you get nothing.",
+                    "Start a flight",
+                  ],
+                ] as const
+              ).map(([action, title, text, label]) => (
+                <div
+                  key={action}
+                  className="grid content-between gap-3 rounded-xl border border-separator p-4"
+                >
+                  <div>
+                    <h3 className="m-0 text-base font-semibold">{title}</h3>
+                    <p className="mt-1 mb-0 text-sm text-muted">{text}</p>
+                  </div>
+                  <Button
+                    variant={action === "open" ? "primary" : "secondary"}
+                    onPress={() => void send(action)}
+                    isDisabled={!interactive || busy}
+                  >
+                    {label}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <p>
+                Open the advanced report for {reward.domain} in this browser for
+                24 hours, including rescans.
+              </p>
               <Button
-                variant="secondary"
-                onPress={() => void send("chooseFlight")}
+                onPress={() => void send("open")}
                 isDisabled={!interactive || busy}
               >
-                Choose one flight
+                Open report for 24 hours
               </Button>
-            ) : (
-              <Link
-                className="inline-link"
-                href={"/account?returnTo=/rewards/" + reward.id}
-              >
-                Sign in or create an account for a flight
-              </Link>
-            )}
-          </div>
+              <p>
+                <Link
+                  className="inline-link"
+                  href={"/account?returnTo=/rewards/" + reward.id}
+                >
+                  Sign in to keep this report, take 50 points or fly instead
+                </Link>
+              </p>
+            </>
+          )}
           <FlightOdds />
         </section>
       ) : receipt ? (
