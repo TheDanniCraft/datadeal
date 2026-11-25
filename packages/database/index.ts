@@ -19,6 +19,7 @@ import {
   calculateAcceptAllScore,
   calculateRejectScore,
   evaluateHeadline,
+  reportSignals,
 } from "@datadeal/scoring";
 import { apiTokenStorage } from "./api-tokens";
 import { creemCreditStorage } from "./creem-credit-storage";
@@ -522,6 +523,7 @@ export function connect(url: string, { reusePool = false } = {}) {
             headlineScenario: scenario,
             ...(rating.noChoiceEvidence && { noChoiceVisit: true }),
             hasFavicon: Boolean(parsed.data.favicon),
+            signals: reportSignals(parsed.data, rating),
           },
         ];
       });

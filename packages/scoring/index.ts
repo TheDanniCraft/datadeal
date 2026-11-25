@@ -30,6 +30,7 @@ export {
   missingPolicyCost,
 } from "./inventory";
 export { grades, gradeForScore, methodologyVersion };
+export { reportSignals, type ReportSignals } from "./signals";
 export const rulesRevision = "browser-evidence-3";
 
 export const baseScore = 75;

@@ -3,7 +3,8 @@
 import Image from "next/image";
 import { AdvancedPreview } from "./report-illustrations";
 import { ReportIcon } from "./report-icon";
-import { combineCosts } from "@datadeal/scoring";
+import { combineCosts, reportSignals } from "@datadeal/scoring";
+import { ReportSignalIcons } from "./report-signals";
 import { pageName } from "../../../lib/content-pages";
 import { ReportCompare } from "./report-compare";
 import {
@@ -2371,6 +2372,8 @@ export function ReportContent({
     (visit) => visit.scenario === "rejected",
   );
   const rejectedScore = rejectedVisit && report?.rejectedScoring;
+  const signals =
+    report && score?.score != null ? reportSignals(report, score) : undefined;
   const headlineLabel = score?.noChoiceEvidence
     ? noChoiceVisitLabel
     : ratingLabels[headlineScenario];
@@ -2764,14 +2767,9 @@ export function ReportContent({
                     </strong>
                     <span className="text-xs text-muted">/100</span>
                   </p>
-                  <div className="grid gap-0.5 pb-0.5 text-right leading-tight">
-                    <span className="report-rating-band text-base font-semibold text-[var(--rating,var(--muted))]">
-                      {grade}
-                    </span>
-                    <span className="text-xs whitespace-nowrap text-muted">
-                      {headlineLabel}
-                    </span>
-                  </div>
+                  <span className="report-rating-band pb-1 text-base font-semibold text-[var(--rating,var(--muted))]">
+                    {grade}
+                  </span>
                 </div>
                 <div
                   role="meter"
@@ -2787,6 +2785,12 @@ export function ReportContent({
                     style={{ width: Math.max(4, score.score) + "%" }}
                   />
                 </div>
+                {signals && (
+                  <ReportSignalIcons
+                    signals={signals}
+                    className="report-signals"
+                  />
+                )}
               </>
             ) : (
               <div className="grid gap-0.5">

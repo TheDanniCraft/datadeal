@@ -7,6 +7,8 @@ import { Chip } from "@heroui/react/chip";
 import { noChoiceVisitLabel, scenarioLabel } from "@datadeal/contracts";
 import { ReportIcon } from "./report/[domain]/report-icon";
 import { bundledSiteFavicon } from "../lib/site-favicon";
+import type { ReportSignals } from "@datadeal/scoring";
+import { ReportSignalIcons } from "./report/[domain]/report-signals";
 
 export function RecentReportList({
   reports,
@@ -19,6 +21,7 @@ export function RecentReportList({
     headlineScenario: keyof typeof scenarioLabel;
     noChoiceVisit?: boolean;
     hasFavicon: boolean;
+    signals?: ReportSignals;
   }[];
 }) {
   return (
@@ -29,6 +32,7 @@ export function RecentReportList({
           score,
           grade,
           hasFavicon,
+          signals,
           headlineScenario,
           noChoiceVisit,
         }) => (
@@ -64,13 +68,19 @@ export function RecentReportList({
                   <ItemCard.Title className="break-all">
                     {domain}
                   </ItemCard.Title>
-                  <ItemCard.Description>
-                    {score === null
-                      ? "Accept-all rating unavailable"
-                      : noChoiceVisit
+                  {signals ? (
+                    <ReportSignalIcons
+                      signals={signals}
+                      plain
+                      className="mt-1"
+                    />
+                  ) : (
+                    <ItemCard.Description>
+                      {noChoiceVisit
                         ? noChoiceVisitLabel
                         : scenarioLabel[headlineScenario]}
-                  </ItemCard.Description>
+                    </ItemCard.Description>
+                  )}
                 </ItemCard.Content>
                 <ItemCard.Action>
                   <Chip

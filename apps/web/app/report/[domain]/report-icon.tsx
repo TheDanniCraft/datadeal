@@ -14,6 +14,14 @@ const paths = {
   sparkle: "m12 3 2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4z",
   lock: "M6 10h12v11H6z M8 10V7a4 4 0 0 1 8 0v3 M12 14v3",
   back: "m14 5-7 7 7 7",
+  cookie:
+    "M12 3a9 9 0 1 0 9 9 4 4 0 0 1-4-4 4 4 0 0 1-5-5Z M8.5 10.5h.01 M15 15h.01 M10 16h.01",
+  noChoice: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z M5.6 5.6l12.8 12.8",
+  clock: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z M12 7v5l3 2",
+  megaphone:
+    "M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1Z M15 9a3 3 0 0 1 0 6 M18 6a7 7 0 0 1 0 12",
+  server: "M4 4h16v6H4z M4 14h16v6H4z M8 7h.01 M8 17h.01",
+  noPolicy: "M6 3h9l4 4v14H6z M15 3v5h4 M10 12l5 5 M15 12l-5 5",
 };
 
 export function ReportIcon({ name }: { name: keyof typeof paths }) {
