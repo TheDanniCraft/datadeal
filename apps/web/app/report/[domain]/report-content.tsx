@@ -2236,7 +2236,7 @@ export function ReportContent({
   );
 
   return (
-    <ReportCitations evidence={report?.evidence}>
+    <ReportCitations evidence={report?.evidence} visits={browserVisits}>
       <a
         className="report-return mb-4 inline-flex items-center gap-1 text-sm text-muted"
         href="/#recent-reports"

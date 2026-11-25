@@ -214,11 +214,23 @@ export function DocumentPassages({
   );
 }
 
+export type VisitStats = {
+  id: string;
+  requests: number;
+  cookies: number;
+  storage?: { localEntries: number; sessionEntries: number };
+  outside: number;
+};
+
 export function ReportCitations({
   evidence,
+  visits,
   children,
 }: {
   evidence?: readonly Evidence[];
+  // Measured counts per visit; the public evidence projection omits the raw
+  // observation, so the dialog reads its numbers from here.
+  visits?: readonly VisitStats[];
   children: ReactNode;
 }) {
   const [selection, setSelection] = useState<{
@@ -332,6 +344,32 @@ export function ReportCitations({
   const start = selection
     ? selection.source.excerpt.indexOf(selection.quote)
     : 0;
+  // Browser visits are measurements, not prose: show their numbers instead
+  // of highlighting a long generated description.
+  const observed =
+    source?.observation?.type === "browser_consent_counts" ||
+    source?.observation?.type === "browser_content_page"
+      ? source.observation
+      : undefined;
+  const counted = source && visits?.find((row) => row.id === source.id);
+  const visit: VisitView | undefined = observed
+    ? {
+        requests: observed.requests,
+        cookies: observed.cookies,
+        storage: observed.storage,
+        domains: [
+          ...new Set([
+            ...observed.externalDomains,
+            ...(observed.afterChoice?.externalDomains ?? []),
+          ]),
+        ],
+        capped:
+          observed.externalDomains.length >= 20 ||
+          (observed.afterChoice?.externalDomains.length ?? 0) >= 20,
+      }
+    : counted
+      ? { ...counted, domains: [], capped: counted.outside >= 20 }
+      : undefined;
 
   return (
     <>
@@ -413,6 +451,12 @@ export function ReportCitations({
                       }
                       tone={selection.tone}
                     />
+                  ) : visit ? (
+                    <VisitSummary
+                      visit={visit}
+                      notes={source.excerpt}
+                      storage={storage}
+                    />
                   ) : (
                     <blockquote
                       lang={source.language}
@@ -428,9 +472,11 @@ export function ReportCitations({
                     </blockquote>
                   )}
                   <div className="grid gap-1 border-t border-separator pt-3 text-sm">
-                    {storage && <p className="mb-2">{storage}</p>}
-                    {(source.observation?.type === "browser_content_page" ||
-                      source.observation?.type === "browser_consent_counts") &&
+                    {storage && !visit && <p className="mb-2">{storage}</p>}
+                    {!visit &&
+                      (source.observation?.type === "browser_content_page" ||
+                        source.observation?.type ===
+                          "browser_consent_counts") &&
                       source.observation.externalDomains.length > 0 && (
                         <p className="mb-2 wrap-anywhere">
                           <strong>Outside domains in this visit</strong>{" "}
@@ -524,5 +570,82 @@ export function ReportCitations({
         </Modal.Container>
       </Modal.Backdrop>
     </>
+  );
+}
+
+type VisitView = {
+  requests: number;
+  cookies: number;
+  storage?: { localEntries: number; sessionEntries: number };
+  // Domain names are part of the advanced report; free readers get a count.
+  domains: string[];
+  outside?: number;
+  capped: boolean;
+};
+
+function VisitSummary({
+  visit,
+  notes,
+  storage,
+}: {
+  visit: VisitView;
+  notes: string;
+  storage?: string | null;
+}) {
+  const outside = visit.domains.length || visit.outside || 0;
+  const stats: [string, string][] = [
+    ["Requests", String(visit.requests)],
+    ["Domains", outside + (visit.capped ? "+" : "")],
+    ["Cookies", String(visit.cookies)],
+    [
+      "Storage",
+      visit.storage
+        ? String(visit.storage.localEntries + visit.storage.sessionEntries)
+        : "–",
+    ],
+  ];
+  return (
+    <div className="grid gap-4">
+      <dl className="m-0 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {stats.map(([label, value]) => (
+          <div key={label} className="rounded-xl bg-default/60 px-3 py-2">
+            <dt className="text-xs text-muted">{label}</dt>
+            <dd className="m-0 text-lg font-semibold tabular-nums">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="-mt-2 text-xs text-muted">
+        Requests attempted, outside domains contacted, and cookies and web
+        storage entries left at the end of the visit.
+      </p>
+      {visit.domains.length > 0 && (
+        <div>
+          <p className="mb-2 text-sm font-medium">Outside domains contacted</p>
+          <ul className="m-0! flex list-none flex-wrap gap-1.5 p-0!">
+            {visit.domains.map((domain) => (
+              <li
+                key={domain}
+                className="rounded-full bg-default px-2.5 py-0.5 text-xs wrap-anywhere"
+              >
+                {domain}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <details className="text-sm">
+        <summary className="cursor-pointer text-muted">
+          Full capture notes
+        </summary>
+        <p className="mt-2 whitespace-pre-line leading-relaxed text-muted wrap-anywhere">
+          {notes}
+        </p>
+        {storage && (
+          <p className="mt-2 leading-relaxed text-muted wrap-anywhere">
+            {storage}
+          </p>
+        )}
+      </details>
+    </div>
   );
 }
