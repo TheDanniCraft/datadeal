@@ -5,6 +5,7 @@ import {
 } from "./observations";
 import { Resolver } from "node:dns/promises";
 import { resolvePublicAddress } from "./public-address";
+import { detectHosting, hostingHeaderNames, isEuropean } from "./hosting";
 export { resolvePublicAddress } from "./public-address";
 import { request } from "node:https";
 import { load } from "cheerio";
@@ -75,6 +76,8 @@ async function readablePage(
   html: string;
   favicon?: string;
   url: URL;
+  address?: string;
+  headers?: Record<string, string>;
   cookies: ReturnType<typeof summarizeResponseCookies>;
 }> {
   if (
@@ -217,6 +220,13 @@ async function readablePage(
       : undefined,
     url,
     cookies: summarizeResponseCookies(response.headers["set-cookie"] ?? []),
+    address: pinned.address,
+    headers: Object.fromEntries(
+      hostingHeaderNames.flatMap((name) => {
+        const value = response.headers[name];
+        return value === undefined ? [] : [[name, String(value).slice(0, 200)]];
+      }),
+    ),
   };
 }
 
@@ -385,6 +395,31 @@ export async function scan(
       kind: "inferred_infrastructure",
       excerpt: "The domain is routed through these hosts.",
       observation: { type: "dns_cname", targets },
+      retrievedAt: new Date().toISOString(),
+      scanId: id,
+    });
+  }
+  const hosting = await detectHosting(
+    homepage.address,
+    homepage.headers ?? {},
+  ).catch(() => undefined);
+  if (hosting && (hosting.host || hosting.cdn)) {
+    const describe = (role: string, p: { name: string; country: string }) =>
+      `${role} ${p.name}${p.country ? ` (${p.country}${isEuropean(p.country) ? "" : ", outside the EU"})` : ""}`;
+    evidence.push({
+      id: "homepage-hosting",
+      kind: "inferred_infrastructure",
+      url: homepage.url.href,
+      excerpt:
+        [
+          hosting.host &&
+            describe("The server's network belongs to", hosting.host),
+          hosting.cdn &&
+            describe("Traffic passes through the CDN", hosting.cdn),
+        ]
+          .filter(Boolean)
+          .join(". ") + ".",
+      observation: hosting,
       retrievedAt: new Date().toISOString(),
       scanId: id,
     });

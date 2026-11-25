@@ -25,6 +25,9 @@ export {
   inventoryRulesRevision,
   consentPenalty,
   breadth,
+  outsideEuFactor,
+  outsideEuHosting,
+  missingPolicyCost,
 } from "./inventory";
 export { grades, gradeForScore, methodologyVersion };
 export const rulesRevision = "browser-evidence-3";
@@ -91,8 +94,22 @@ function measuredHomepage(
 const liveInventory = (report: ScanReport) =>
   !!report.storageInventory?.classifications.length;
 
+/**
+ * A report is partial when the default visit or the privacy policy is
+ * missing. Without a policy the inventory still rates what the browser saw
+ * (and charges for the missing policy); a missing visit still blocks it.
+ */
+function ratable(report: ScanReport) {
+  if (!report.partial) return true;
+  return (
+    liveInventory(report) &&
+    report.consentCoverage?.default === "measured" &&
+    !report.findings.some(({ rule }) => rule === "policy_available")
+  );
+}
+
 export function verifiedAcceptAllRating(report: ScanReport) {
-  if (!report.partial && acceptAllHomepage(report))
+  if (ratable(report) && acceptAllHomepage(report))
     return (
       report.scoringCorrection?.accepted ??
       (liveInventory(report) ? calculateAcceptAllScore(report) : undefined) ??
@@ -128,7 +145,8 @@ export function acceptAllScoreChange(
 }
 
 export function verifiedRejectRating(report: ScanReport) {
-  if (report.partial || report.consentCoverage?.rejected !== "measured") return;
+  if (!ratable(report) || report.consentCoverage?.rejected !== "measured")
+    return;
   if (measuredHomepage(report, "rejected")?.url)
     return (
       report.scoringCorrection?.rejected ??

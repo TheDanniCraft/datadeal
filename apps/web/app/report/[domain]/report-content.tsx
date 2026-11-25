@@ -549,6 +549,9 @@ function InventoryBreakdown({
                     {item.consentPenalty && (
                       <span className="text-muted"> · before you choose</span>
                     )}
+                    {item.outsideEu && (
+                      <span className="text-muted"> · outside the EU</span>
+                    )}
                   </span>
                   <span className="font-medium tabular-nums">
                     −{Math.round(item.cost)}
@@ -863,12 +866,14 @@ function flowEvidence(destination: FlowDestination) {
 const servicePurposeLabels = {
   advertising: "Advertising",
   analytics: "Analytics",
+  hosting: "Hosting",
   needed: "Needed for the site",
   unknown: "Unidentified",
 } as const;
 const servicePurposeTone = {
   advertising: "bg-danger/12 text-danger",
   analytics: "bg-warning/15 text-warning",
+  hosting: "bg-default text-foreground",
   needed: "bg-success/12 text-success",
   unknown: "bg-default text-muted",
 } as const;
@@ -1123,6 +1128,11 @@ function DestinationCard({
             }
           >
             {servicePurposeLabels[item.service.purpose]}
+          </span>
+        )}
+        {item.service?.outsideEu && (
+          <span className="rounded-full bg-default px-2 py-0.5 text-xs font-medium">
+            Outside the EU
           </span>
         )}
         <span className="rounded-full bg-default px-2 py-0.5 text-xs font-medium">
@@ -2479,6 +2489,17 @@ export function ReportContent({
       )
     : undefined;
   const browserFindings = practices.filter((row) => row !== homepageFinding);
+  const hostingEvidence = report?.evidence.find(
+    (e) => e.scanId === report.id && e.observation?.type === "hosting",
+  );
+  const hostingInfo =
+    hostingEvidence?.observation?.type === "hosting"
+      ? {
+          evidenceId: hostingEvidence.id,
+          host: hostingEvidence.observation.host,
+          cdn: hostingEvidence.observation.cdn,
+        }
+      : undefined;
   const companies =
     headlineScenario === "accepted" && score?.inventoryAssessment
       ? companyFindings(
@@ -2486,6 +2507,7 @@ export function ReportContent({
           score.inventoryAssessment.costs,
           report?.domain ?? host,
           host,
+          hostingInfo,
         )
       : [];
   const browserFindingsSection = companies.length ? (

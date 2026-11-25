@@ -6,7 +6,7 @@ import {
   type StorageInventory,
 } from "@datadeal/contracts/storage-inventory";
 
-export const inventoryPromptVersion = "inventory-1";
+export const inventoryPromptVersion = "inventory-2";
 // Smaller batches keep every row inside one complete answer.
 const batchSize = 40;
 
@@ -35,6 +35,10 @@ export const inventoryInstructions = [
   "  recognizes your browser on later visits.'",
   "- basis: known_convention (widely documented name or domain), site_policy or vendor_policy (only with a",
   "  citation whose quote is copied exactly from a supplied source), or none.",
+  "- jurisdiction: where the company that receives or controls the data is based. eu for the EU/EEA,",
+  "  Switzerland or the UK; non_eu when the company or its parent is elsewhere (e.g. Google, Meta, Microsoft,",
+  "  Amazon, Cloudflare and other US companies, even through an EU subsidiary); unknown if you cannot tell.",
+  "  For first_party items use the site operator's country when the sources state it, otherwise unknown.",
   "",
   "Judge the actual function, not the mere presence of a cookie: a chat conversation ID or a consent record is",
   "proportionate; a persistent ID shared with an advertising network is not. A same-site cookie can still be",
@@ -43,12 +47,15 @@ export const inventoryInstructions = [
   "payload (e.g. Plausible); the site forwards it to that vendor. Classify it by that vendor's use.",
   "A recipient whose only phase is on_use was not contacted during the visits; the site's policy names it for",
   "a feature the visitor chooses to use (booking, chat, forms). Classify it from the cited policy text.",
+  "Sources marked site_processing_terms are the site's data processing agreement (AVV/DPA) or its list of",
+  "subprocessors. A vendor listed there acts for the site (controller processor), and a listed country or",
+  "location tells you its jurisdiction.",
   "If you cannot tell what an item does, use purpose unknown and confidence low. You may request research on up",
   "to 3 recipient domains from the inventory whose own privacy or cookie documentation would explain unknown",
   "items. Do not request research for well-known vendors.",
   "",
   'Return only JSON: {"classifications":[{"itemId","purpose","controller","vendor","confidence","reason",',
-  '"basis","citation"?:{"evidenceId","quote"}}],"research":[{"domain","reason"}]}',
+  '"basis","jurisdiction","citation"?:{"evidenceId","quote"}}],"research":[{"domain","reason"}]}',
 ].join("\n");
 
 const output = z.object({
@@ -75,9 +82,10 @@ export function inventorySources(evidence: readonly Evidence[]): Source[] {
           (entry.observation?.type === "policy_section" ||
             entry.documentKind === "cookies" ||
             entry.documentKind === "privacy")) ||
-        entry.observation?.type === "provider_policy",
+        entry.observation?.type === "provider_policy" ||
+        entry.observation?.type === "processing_document",
     )
-    .slice(0, 40);
+    .slice(0, 48);
 }
 
 export function inventoryInput(
@@ -104,7 +112,9 @@ export function inventoryInput(
         kind:
           source.observation?.type === "provider_policy"
             ? "vendor_policy"
-            : "site_policy",
+            : source.observation?.type === "processing_document"
+              ? "site_processing_terms"
+              : "site_policy",
         url: source.url,
         text: source.excerpt.slice(0, 3000),
       })),
@@ -139,6 +149,8 @@ export function validateClassifications(
       const row = entry as Record<string, unknown>;
       if (row.confidence === "medium") row.confidence = "moderate";
       if (row.citation == null) delete row.citation;
+      if (!["eu", "non_eu", "unknown"].includes(row.jurisdiction as string))
+        delete row.jurisdiction;
       if (typeof row.reason === "string" && row.reason.length > 280)
         row.reason = row.reason.slice(0, 277).trimEnd() + "…";
     }

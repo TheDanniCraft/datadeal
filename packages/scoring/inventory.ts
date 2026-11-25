@@ -1,3 +1,4 @@
+import { isEuropean } from "@datadeal/contracts";
 import type { PublishedScoring, ScanReport } from "@datadeal/contracts";
 import type {
   InventoryClassification,
@@ -8,7 +9,7 @@ import type {
 } from "@datadeal/contracts/storage-inventory";
 import { gradeForScore, methodologyVersion } from "./grades";
 
-export const inventoryRulesRevision = "contextual-practices-7";
+export const inventoryRulesRevision = "contextual-practices-8";
 type Scenario = "default" | "rejected" | "accepted";
 
 /** Costs from docs/scoring-v2.md. The analyst classifies; these numbers decide. */
@@ -24,6 +25,12 @@ export const inventoryCosts = {
   contactAdvertising: 35,
 } as const;
 export const consentPenalty = 1.5;
+/** A recipient company based outside the EU/EEA, Switzerland or the UK. */
+export const outsideEuFactor = 1.25;
+/** Hosting or a CDN outside Europe: needed to run the site, so a small cost. */
+export const outsideEuHosting = 4;
+/** The EU requires a privacy policy; a site without one cannot be read. */
+export const missingPolicyCost = 15;
 const proportionatePurposes = new Set([
   "essential",
   "security",
@@ -62,6 +69,8 @@ type Cost = {
   // Cost before the consent penalty; decides which practice it was.
   baseCost: number;
   consentPenalty: boolean;
+  outsideEu?: boolean;
+  kind?: "item" | "hosting" | "policy";
   reason: string;
   evidenceIds: string[];
   unknown: boolean;
@@ -205,9 +214,12 @@ export function scanCoverage(
   return { coverage: c, reasons, pages };
 }
 
+type HostingInput = Pick<ScanReport, "evidence" | "id" | "findings">;
+
 export function inventoryCostsFor(
   inventory: StorageInventory,
   scenario: Scenario,
+  report?: Partial<HostingInput>,
 ): Cost[] {
   const phases = scenarioPhases[scenario];
   const byId = new Map(inventory.classifications.map((c) => [c.itemId, c]));
@@ -222,13 +234,19 @@ export function inventoryCostsFor(
     const withoutConsent =
       base > 0 &&
       item.phases.some((p) => p === "before_choice" || p === "after_reject");
+    const outsideEu = base > 0 && c?.jurisdiction === "non_eu";
     costs.push({
       itemId: item.id,
       label,
       vendor: c?.vendor ?? null,
-      cost: withoutConsent ? base * consentPenalty : base,
+      cost:
+        base *
+        (withoutConsent ? consentPenalty : 1) *
+        (outsideEu ? outsideEuFactor : 1),
       baseCost: base,
       consentPenalty: withoutConsent,
+      ...(outsideEu && { outsideEu }),
+      kind: "item",
       reason: c?.reason ?? "Not classified.",
       evidenceIds: [
         ...new Set([
@@ -251,10 +269,63 @@ export function inventoryCostsFor(
           : "Data sent to " + item.domain,
       recipientCost(item, byId.get(item.id)),
     );
+  const hosting = report?.evidence?.find(
+    (e) => e.scanId === report.id && e.observation?.type === "hosting",
+  );
+  if (hosting?.observation?.type === "hosting") {
+    const { host, cdn } = hosting.observation;
+    for (const [role, provider] of [
+      ["Hosting", host],
+      ["CDN", cdn],
+    ] as const) {
+      if (!provider?.country || isEuropean(provider.country)) continue;
+      costs.push({
+        itemId: "hosting-" + role.toLowerCase(),
+        label: `${role}: ${provider.name} (${provider.country})`,
+        vendor: provider.name,
+        cost: outsideEuHosting,
+        baseCost: outsideEuHosting,
+        consentPenalty: false,
+        outsideEu: true,
+        kind: "hosting",
+        reason:
+          role === "CDN"
+            ? `Every visit passes through ${provider.name}, a company based outside the EU.`
+            : `The site's servers run on ${provider.name}'s network, a company based outside the EU.`,
+        evidenceIds: [hosting.id],
+        unknown: false,
+      });
+    }
+  }
+  if (
+    report?.findings &&
+    !report.findings.some(({ rule }) => rule === "policy_available")
+  )
+    costs.push({
+      itemId: "policy-missing",
+      label: "No privacy policy found",
+      vendor: null,
+      cost: missingPolicyCost,
+      baseCost: missingPolicyCost,
+      consentPenalty: false,
+      kind: "policy",
+      reason:
+        "We couldn't find a privacy policy, which EU law requires. Nothing explains what the site does with your data.",
+      evidenceIds: [],
+      unknown: false,
+    });
   return costs.sort((a, b) => b.cost - a.cost);
 }
 
-function verdictFor(costs: Cost[]) {
+function verdictFor(all: Cost[]) {
+  const missingPolicy = all.some(({ kind }) => kind === "policy");
+  const verdict = itemVerdict(
+    all.filter(({ kind }) => !kind || kind === "item"),
+  );
+  return missingPolicy ? verdict + " No privacy policy found." : verdict;
+}
+
+function itemVerdict(costs: Cost[]) {
   // Compare practices by their base cost: a 50% consent penalty must not
   // turn a linked ad ID (25 → 37.5) into the email case (35).
   const worst = Math.max(0, ...costs.map(({ baseCost }) => baseCost));
@@ -276,14 +347,16 @@ function verdictFor(costs: Cost[]) {
 
 /** Scoring v2 rating for one scenario, or undefined if not classified. */
 export function inventoryRating(
-  report: Pick<ScanReport, "storageInventory"> & Partial<CoverageInput>,
+  report: Pick<ScanReport, "storageInventory"> &
+    Partial<CoverageInput> &
+    Partial<HostingInput>,
   scenario: Scenario,
 ): PublishedScoring | undefined {
   const inventory = report.storageInventory;
   if (!inventory) return undefined;
   const itemCount = inventory.storage.length + inventory.recipients.length;
   if (itemCount && !inventory.classifications.length) return undefined;
-  const costs = inventoryCostsFor(inventory, scenario);
+  const costs = inventoryCostsFor(inventory, scenario, report);
   const raw = Math.max(0, 100 - combineCosts(costs.map(({ cost }) => cost)));
   const unknown = costs.filter((c) => c.unknown).length;
   const classified = inventory.classifications.length;

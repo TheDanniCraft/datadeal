@@ -99,6 +99,8 @@ export const inventoryClassification = z.strictObject({
   confidence: practiceConfidence,
   reason: z.string().trim().min(1).max(280),
   basis: z.enum(["known_convention", "site_policy", "vendor_policy", "none"]),
+  // Where the vendor's company is based: eu = EU/EEA, Switzerland or the UK.
+  jurisdiction: z.enum(["eu", "non_eu", "unknown"]).optional(),
   // Required for site_policy and vendor_policy: an exact quote from evidence.
   citation: z
     .strictObject({

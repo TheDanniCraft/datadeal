@@ -3,6 +3,9 @@ import { Accordion, Card } from "@heroui/react";
 import {
   breadth,
   consentPenalty,
+  missingPolicyCost,
+  outsideEuFactor,
+  outsideEuHosting,
   grades,
   inventoryCosts,
   methodologyVersion,
@@ -32,6 +35,14 @@ const costLabels: [keyof typeof inventoryCosts, string][] = [
   ["unknownIdentifier", "An ID we couldn't identify"],
   ["contractAnalytics", "Analytics run for the site, without a lasting ID"],
   ["proportionate", "Needed for the site to work, such as login or a cart"],
+];
+const extraCosts: [string, string][] = [
+  ["No privacy policy found", "−" + missingPolicyCost],
+  ["Hosting or CDN outside the EU", "−" + outsideEuHosting],
+  [
+    "Any item above, when the company is outside the EU",
+    "+" + Math.round((outsideEuFactor - 1) * 100) + "%",
+  ],
 ];
 
 export function MethodologyPage() {
@@ -100,6 +111,15 @@ export function MethodologyPage() {
             {Math.round((consentPenalty - 1) * 100)}% more.
           </p>
           <p>
+            Where your data goes matters too. An item that reaches a company
+            based outside the EU (or Switzerland and the UK) costs{" "}
+            {Math.round((outsideEuFactor - 1) * 100)}% more, because EU privacy
+            law can&apos;t fully protect it there. Hosting or a CDN outside the
+            EU costs {outsideEuHosting} points; EU hosting costs nothing. A site
+            with no privacy policy, which EU law requires, costs{" "}
+            {missingPolicyCost} points.
+          </p>
+          <p>
             The headline score rates the visit after you accept all cookies.
             When part of the site could not be tested, the score moves toward
             the middle of the scale, because we can&apos;t vouch for what we
@@ -117,14 +137,20 @@ export function MethodologyPage() {
             <Accordion.Panel>
               <Accordion.Body className="text-foreground">
                 <ul className="m-0 list-none divide-y divide-border p-0">
-                  {costLabels.map(([key, label]) => (
+                  {[
+                    ...costLabels.map(
+                      ([key, label]) =>
+                        [label, "−" + inventoryCosts[key]] as [string, string],
+                    ),
+                    ...extraCosts,
+                  ].map(([label, value]) => (
                     <li
-                      key={key}
+                      key={label}
                       className="flex items-baseline justify-between gap-4 py-2.5"
                     >
                       <span>{label}</span>
                       <span className="shrink-0 font-medium tabular-nums">
-                        −{inventoryCosts[key]}
+                        {value}
                       </span>
                     </li>
                   ))}
@@ -144,7 +170,8 @@ export function MethodologyPage() {
                 <p>
                   We need a completed visit with a working &ldquo;Accept
                   all&rdquo; button. Without one, the report still shows what we
-                  found but doesn&apos;t give a number.
+                  found but doesn&apos;t give a number. A missing privacy policy
+                  doesn&apos;t stop the rating; it costs points instead.
                 </p>
                 <p>
                   What happens after you sign in, or on the company&apos;s

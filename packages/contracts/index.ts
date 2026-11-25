@@ -141,6 +141,49 @@ export function requestEvidencePriority(group: BrowserRequestFields) {
   );
 }
 
+/** EU/EEA plus Switzerland and the UK: treated as European for scoring. */
+export const europeanCountries: ReadonlySet<string> = new Set([
+  "AT",
+  "BE",
+  "BG",
+  "HR",
+  "CY",
+  "CZ",
+  "DK",
+  "EE",
+  "FI",
+  "FR",
+  "DE",
+  "GR",
+  "HU",
+  "IE",
+  "IT",
+  "LV",
+  "LT",
+  "LU",
+  "MT",
+  "NL",
+  "PL",
+  "PT",
+  "RO",
+  "SK",
+  "SI",
+  "ES",
+  "SE",
+  "IS",
+  "LI",
+  "NO",
+  "CH",
+  "GB",
+]);
+export const isEuropean = (country: string | undefined) =>
+  !!country && europeanCountries.has(country);
+
+/** A company running a site's servers or CDN and its home country. */
+export const hostingProvider = z.object({
+  name: z.string().min(1).max(120),
+  country: z.string().regex(/^(?:[A-Z]{2})?$/),
+});
 export const browserVisit = z.object({
   freshContext: z.literal(true).optional(),
   capture: z
@@ -242,6 +285,18 @@ export const evidence = z.object({
       z.object({
         type: z.literal("dns_cname"),
         targets: z.array(domain).min(1).max(6),
+      }),
+      z.object({
+        type: z.literal("hosting"),
+        ip: z.union([z.ipv4(), z.ipv6()]).optional(),
+        asn: z.number().int().positive().optional(),
+        network: z.string().min(1).max(120).optional(),
+        networkCountry: z
+          .string()
+          .regex(/^[A-Z]{2}$/)
+          .optional(),
+        host: hostingProvider.optional(),
+        cdn: hostingProvider.optional(),
       }),
       z.object({
         type: z.literal("policy_section"),
@@ -351,6 +406,8 @@ const publishedScoring = z.object({
             vendor: z.string().max(80).nullable(),
             cost: z.number().min(0).max(100),
             consentPenalty: z.boolean(),
+            outsideEu: z.boolean().optional(),
+            kind: z.enum(["item", "hosting", "policy"]).optional(),
             reason: z.string().min(1).max(300),
             evidenceIds: z.array(z.string()).max(8),
           }),

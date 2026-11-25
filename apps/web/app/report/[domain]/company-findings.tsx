@@ -10,12 +10,14 @@ import type {
 const purposeLabels: Record<CompanyPurpose, string> = {
   advertising: "Advertising",
   analytics: "Analytics",
+  hosting: "Hosting",
   needed: "Needed for the site",
   unknown: "Unidentified",
 };
 const purposeTone: Record<CompanyPurpose, string> = {
   advertising: "bg-danger/12 text-danger",
   analytics: "bg-warning/15 text-warning",
+  hosting: "bg-default text-foreground",
   needed: "bg-success/12 text-success",
   unknown: "bg-default text-muted",
 };
@@ -45,6 +47,9 @@ function plural(count: number, word: string) {
 }
 
 function headline(company: CompanyFinding) {
+  if (company.infrastructure === "cdn") return "Every visit passes through it";
+  if (company.infrastructure === "host" && company.purpose === "hosting")
+    return "Runs the site's servers";
   const sent = company.received;
   const stored = company.cookies + company.otherStorage;
   if (company.purpose === "needed")
@@ -190,7 +195,7 @@ export function CompanyFindings({
   const visible = showAll ? filtered : filtered.slice(0, 6);
   const tabs = [
     ["all", "All", companies.length] as const,
-    ...(["advertising", "analytics", "unknown", "needed"] as const)
+    ...(["advertising", "analytics", "unknown", "hosting", "needed"] as const)
       .filter((purpose) => counts.get(purpose))
       .map(
         (purpose) =>
@@ -245,7 +250,9 @@ export function CompanyFindings({
                     <span className="truncate font-medium">{company.name}</span>
                     <span className="text-xs leading-snug text-muted">
                       {purposeLabels[company.purpose]} · {headline(company)}
+                      {company.outsideEu && " · outside the EU"}
                       {company.purpose !== "needed" &&
+                      company.purpose !== "hosting" &&
                       (company.timing === "before_choice" ||
                         company.timing === "after_reject")
                         ? " · " + timingLabels[company.timing].toLowerCase()

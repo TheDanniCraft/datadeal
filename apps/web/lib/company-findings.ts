@@ -7,8 +7,10 @@ import type {
   StorageInventory,
 } from "@datadeal/contracts/storage-inventory";
 import { getDomain } from "tldts";
+import { isEuropean } from "@datadeal/contracts";
 
-export type CompanyPurpose = "advertising" | "analytics" | "needed" | "unknown";
+export type CompanyPurpose =
+  "advertising" | "analytics" | "hosting" | "needed" | "unknown";
 type Cost = NonNullable<
   PublishedScoring["inventoryAssessment"]
 >["costs"][number];
@@ -18,6 +20,10 @@ export type CompanyFinding = {
   name: string;
   firstParty: boolean;
   purpose: CompanyPurpose;
+  /** The company is based outside the EU/EEA, Switzerland and the UK. */
+  outsideEu?: boolean;
+  /** Hosting or CDN: what it does for the site. */
+  infrastructure?: "host" | "cdn";
   /** Largest point cost of any item from this company in the headline visit. */
   cost: number;
   /** The phase that matters most for this company, see phaseRank. */
@@ -52,6 +58,7 @@ const purposeRank: CompanyPurpose[] = [
   "advertising",
   "analytics",
   "unknown",
+  "hosting",
   "needed",
 ];
 // Before you agree is worse than after; "on use" was never observed.
@@ -66,11 +73,18 @@ const expiryRank = ["within_day", "within_month", "within_year", "over_year"];
 const site = (host: string) =>
   getDomain(host, { allowPrivateDomains: true }) ?? host;
 
+export type HostingInfo = {
+  evidenceId: string;
+  host?: { name: string; country: string };
+  cdn?: { name: string; country: string };
+};
+
 export function companyFindings(
   inventory: StorageInventory | undefined,
   costs: readonly Cost[] | undefined,
   homeDomain: string,
   siteName: string,
+  hosting?: HostingInfo,
 ): CompanyFinding[] {
   if (!inventory?.classifications.length) return [];
   const home = site(homeDomain);
@@ -132,6 +146,7 @@ export function companyFindings(
       company.domains.push(site(host));
     for (const id of item.evidenceIds)
       if (!company.evidenceIds.includes(id)) company.evidenceIds.push(id);
+    if (c?.jurisdiction === "non_eu") company.outsideEu = true;
     apply(company);
   };
 
@@ -156,6 +171,42 @@ export function companyFindings(
       co.linkedIdentifier ||= item.linkedIdentifier;
     });
 
+  for (const role of ["host", "cdn"] as const) {
+    const provider = hosting?.[role];
+    if (!provider) continue;
+    const key = provider.name.toLowerCase();
+    const outsideEu = !!provider.country && !isEuropean(provider.country);
+    const cost =
+      costById.get(role === "host" ? "hosting-hosting" : "hosting-cdn") ?? 0;
+    const existing = companies.get(key);
+    if (existing) {
+      existing.infrastructure ??= role;
+      existing.cost = Math.max(existing.cost, cost);
+      existing.outsideEu ||= outsideEu;
+      continue;
+    }
+    companies.set(key, {
+      key,
+      name: provider.name,
+      firstParty: false,
+      purpose: "hosting",
+      infrastructure: role,
+      outsideEu,
+      cost,
+      timing: "before_choice",
+      cookies: 0,
+      otherStorage: 0,
+      lastingIds: 0,
+      received: [],
+      linkedIdentifier: false,
+      domains: [],
+      reason:
+        role === "cdn"
+          ? `Every visit to the site passes through ${provider.name}${provider.country ? ` (${provider.country})` : ""}, which can see your IP address and the pages you open.`
+          : `The site's servers run on ${provider.name}'s network${provider.country ? ` (${provider.country})` : ""}. The host sees your IP address and every page you request.`,
+      evidenceIds: [hosting!.evidenceId],
+    });
+  }
   return [...companies.values()].sort(
     (a, b) =>
       b.cost - a.cost ||
@@ -169,6 +220,7 @@ export type RecipientService = {
   vendor: string | null;
   purpose: CompanyPurpose;
   reason: string;
+  outsideEu?: boolean;
 };
 
 /** What each contacted site is, by registrable domain, from the inventory. */
@@ -179,6 +231,7 @@ export function recipientServices(inventory: StorageInventory | undefined) {
   for (const item of inventory.recipients) {
     const c = byId.get(item.id);
     if (!c) continue;
+    const outsideEu = c.jurisdiction === "non_eu";
     const key = site(item.domain);
     const purpose = purposeGroup[c.purpose];
     const existing = services.get(key);
@@ -186,7 +239,12 @@ export function recipientServices(inventory: StorageInventory | undefined) {
       !existing ||
       purposeRank.indexOf(purpose) < purposeRank.indexOf(existing.purpose)
     )
-      services.set(key, { vendor: c.vendor, purpose, reason: c.reason });
+      services.set(key, {
+        vendor: c.vendor,
+        purpose,
+        reason: c.reason,
+        ...(outsideEu && { outsideEu }),
+      });
   }
   return services;
 }

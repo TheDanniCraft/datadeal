@@ -119,7 +119,7 @@ describe("calibration", () => {
     expect(r).toMatchObject({
       score: 99,
       grade: "Excellent",
-      rulesRevision: "contextual-practices-7",
+      rulesRevision: "contextual-practices-8",
     });
   });
 
@@ -308,5 +308,75 @@ describe("rules", () => {
     expect(r.inventoryAssessment?.costs[0].evidenceIds).toEqual([
       "document-1-section-4",
     ]);
+  });
+});
+
+describe("jurisdiction, hosting and policy", () => {
+  const scanId = "00000000-0000-4000-8000-000000000001";
+  const withPolicy = {
+    ...covered,
+    id: scanId,
+    findings: [{ rule: "policy_available" }],
+    evidence: [],
+  };
+  const adId = () => {
+    const ads = recipient("ads.example", { fields: ["identifier"] });
+    return [ads, classify(ads, "advertising", "independent")] as const;
+  };
+
+  test("a recipient outside the EU costs 25% more", () => {
+    const [ads, c] = adId();
+    const eu = rate(
+      inventory([[ads, { ...c, jurisdiction: "eu" }]]),
+      "accepted",
+      withPolicy,
+    );
+    const us = rate(
+      inventory([[ads, { ...c, jurisdiction: "non_eu" }]]),
+      "accepted",
+      withPolicy,
+    );
+    expect(eu.inventoryAssessment?.costs[0].cost).toBe(25);
+    expect(us.inventoryAssessment?.costs[0]).toMatchObject({
+      cost: 31.3,
+      outsideEu: true,
+    });
+    expect(us.score).toBeLessThan(eu.score!);
+  });
+
+  test("hosting outside the EU costs a little; EU hosting is free", () => {
+    const hosted = (country: string) => ({
+      ...withPolicy,
+      evidence: [
+        {
+          id: "homepage-hosting",
+          kind: "inferred_infrastructure",
+          scanId,
+          excerpt: "Hosting.",
+          retrievedAt: new Date(0).toISOString(),
+          observation: { type: "hosting", host: { name: "Host", country } },
+        },
+      ],
+    });
+    const costs = (country: string) =>
+      rate(inventory([]), "accepted", hosted(country)).inventoryAssessment!
+        .costs;
+    expect(costs("DE")).toEqual([]);
+    expect(costs("US")).toEqual([
+      expect.objectContaining({
+        itemId: "hosting-hosting",
+        cost: 4,
+        kind: "hosting",
+      }),
+    ]);
+  });
+
+  test("a missing privacy policy costs 15 and is named in the verdict", () => {
+    const r = rate(inventory([]), "accepted", { ...withPolicy, findings: [] });
+    expect(r.inventoryAssessment?.costs[0]).toMatchObject({
+      itemId: "policy-missing",
+      cost: 15,
+    });
+    expect(r.verdict).toMatch(/No privacy policy found\.$/);
   });
 });
