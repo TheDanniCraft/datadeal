@@ -5,7 +5,10 @@ import { database } from "../lib/reports";
 
 export default async function Home() {
   await connection();
-  const recent = (await database?.recentPublishedDomains()) ?? [];
+  // Only rated sites: an unrated report says little on a landing page.
+  const recent = ((await database?.recentPublishedDomains()) ?? []).filter(
+    ({ score }) => score !== null,
+  );
   return (
     <>
       <section className="pt-12 pb-8 md:pt-16 md:pb-12">
