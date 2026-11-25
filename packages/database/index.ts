@@ -130,7 +130,13 @@ export function connect(url: string, { reusePool = false } = {}) {
               and s.access_until > now() and s.status in ('active','canceled','past_due')) limit 1`;
       if (!watcher) return { code: "watchlist_disabled" } as const;
     }
-    const cooldownHours = source === "watchlist" ? 168 : 1;
+    // Development only: rescan without waiting. Production builds always run
+    // with NODE_ENV=production, where the flag has no effect.
+    const skipCooldown =
+      source === "manual" &&
+      process.env.NODE_ENV !== "production" &&
+      process.env.DATADEAL_DEV_SKIP_SCAN_COOLDOWN === "true";
+    const cooldownHours = skipCooldown ? 0 : source === "watchlist" ? 168 : 1;
     const [existing] = await tx<
       { id: string; state: string; retryAfter: number }[]
     >`select id, state, greatest(1, ceil(extract(epoch from requested_at + interval '1 hour' - now())))::int as "retryAfter" from scans where domain = ${host}
