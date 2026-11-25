@@ -2529,16 +2529,27 @@ export function ReportContent({
       ) : (
         <>
           {analysisOverview}
-          {privacyProfileAdvice}
-          <ReportObservations rows={findingsRows} />
-          <ContextFindings rows={browserFindings} />
-
-          {ratingComparison}
+          {/* Below the score and summary, never above them. */}
           <ReportAdvertisement
             path={adUnit}
             limitedPath={limitedAdUnit}
             testAd={testAd}
           />
+          {(["left", "right"] as const).map((side) => (
+            <ReportAdvertisement
+              key={side}
+              path={adUnit}
+              limitedPath={limitedAdUnit}
+              testAd={testAd}
+              format="rail"
+              side={side}
+            />
+          ))}
+          {privacyProfileAdvice}
+          <ReportObservations rows={findingsRows} />
+          <ContextFindings rows={browserFindings} />
+
+          {ratingComparison}
           {adPreview && (
             <aside
               className="my-5 rounded-lg bg-surface p-4"

@@ -70,10 +70,14 @@ function DisplaySlot({
   path,
   testAd,
   limited,
+  format,
+  side,
 }: {
   path: string;
   testAd: boolean;
   limited: boolean;
+  format: "banner" | "rail";
+  side?: "left" | "right";
 }) {
   const id = "gpt-" + useId();
   const slot = useRef<HTMLDivElement>(null);
@@ -86,16 +90,38 @@ function DisplaySlot({
         setFailure,
         testAd,
         limited,
+        format,
       );
-  }, [path, failure, testAd, limited]);
+  }, [path, failure, testAd, limited, format]);
 
-  if (failure) return failure === "load_failed" ? <FundingNotice /> : null;
+  if (failure)
+    return failure === "load_failed" && format === "banner" ? (
+      <FundingNotice />
+    ) : null;
+  if (format === "rail")
+    // Only on wide screens, outside the 50rem report column.
+    return (
+      <aside
+        aria-label="Advertisement"
+        className={
+          "fixed top-24 hidden w-[160px] min-[1280px]:block " +
+          (side === "left"
+            ? "left-[calc(50%-25rem-160px-2rem)]"
+            : "right-[calc(50%-25rem-160px-2rem)]")
+        }
+      >
+        <small className="text-xs text-muted">
+          {testAd ? "Google sample ad" : "Advertisement"}
+        </small>
+        <div id={id} ref={slot} className="mt-1 min-h-[600px]" />
+      </aside>
+    );
   return (
-    <aside className="mt-8" aria-label="Advertisement">
+    <aside className="my-6" aria-label="Advertisement">
       <small className="text-sm text-muted">
         {testAd ? "Google sample ad" : "Advertisement"}
       </small>
-      <div id={id} ref={slot} />
+      <div id={id} ref={slot} className="mt-1 flex justify-center" />
     </aside>
   );
 }
@@ -104,10 +130,14 @@ export function ReportAdvertisement({
   path,
   limitedPath,
   testAd = false,
+  format = "banner",
+  side,
 }: {
   path?: string;
   limitedPath?: string;
   testAd?: boolean;
+  format?: "banner" | "rail";
+  side?: "left" | "right";
 }) {
   const consent = useAdvertisingConsent();
   const limited = consent === "limited";
@@ -118,6 +148,8 @@ export function ReportAdvertisement({
       path={unit}
       testAd={testAd}
       limited={limited}
+      format={format}
+      side={side}
     />
   ) : null;
 }

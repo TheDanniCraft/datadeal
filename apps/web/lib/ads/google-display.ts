@@ -16,7 +16,11 @@ type PublisherAds = PublisherPrivacy & {
 type Gpt = {
   cmd: { push(callback: () => void): unknown };
   apiReady?: boolean;
-  defineSlot(path: string, size: [number, number], id: string): Slot | null;
+  defineSlot(
+    path: string,
+    size: [number, number] | [number, number][],
+    id: string,
+  ): Slot | null;
   pubads(): PublisherAds;
   enableServices(): void;
   display(slot: Slot): void;
@@ -31,6 +35,7 @@ export function mountGoogleDisplayAd(
   onUnavailable: (reason: DisplayAdFailure) => void,
   testAd = false,
   limited = false,
+  format: "banner" | "rail" = "banner",
 ) {
   const scope = window as Window & { googletag?: Gpt };
   const tag = scope.googletag ?? ({ cmd: [] } as unknown as Gpt);
@@ -60,7 +65,7 @@ export function mountGoogleDisplayAd(
   tag.cmd.push(() => {
     if (!active || !element.isConnected) return;
     const width = element.clientWidth;
-    if (width < 300) {
+    if (width < (format === "rail" ? 120 : 300)) {
       unavailable();
       return;
     }
@@ -71,7 +76,18 @@ export function mountGoogleDisplayAd(
     }
     slot = tag.defineSlot(
       path,
-      testAd ? [300, 250] : width >= 728 ? [728, 90] : [300, 50],
+      format === "rail"
+        ? width >= 160
+          ? [160, 600]
+          : [120, 600]
+        : // In-page placements are a slim horizontal strip, never a block.
+          width >= 728
+          ? [728, 90]
+          : [
+              [320, 100],
+              [320, 50],
+              [300, 50],
+            ],
       element.id,
     );
     if (!slot) {
