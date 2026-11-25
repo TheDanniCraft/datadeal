@@ -25,6 +25,8 @@ import {
 } from "../../../lib/content-pages";
 import { isPolicyDocument } from "../../../lib/report-documents";
 import { ContextFindings } from "./context-findings";
+import { CompanyFindings } from "./company-findings";
+import { companyFindings } from "../../../lib/company-findings";
 import { HistoryComparison, type ScanComparison } from "./history-comparison";
 import type { PracticeTakeaway } from "../../../lib/practice-takeaways";
 import { ReportContentPages } from "./report-content-pages";
@@ -2151,6 +2153,23 @@ export function ReportContent({
       )
     : undefined;
   const browserFindings = practices.filter((row) => row !== homepageFinding);
+  const companies =
+    headlineScenario === "accepted" && score?.inventoryAssessment
+      ? companyFindings(
+          report?.storageInventory,
+          score.inventoryAssessment.costs,
+          report?.domain ?? host,
+          host,
+        )
+      : [];
+  const browserFindingsSection = companies.length ? (
+    <CompanyFindings
+      companies={companies}
+      evidenceIds={[...evidenceById.keys()]}
+    />
+  ) : (
+    <ContextFindings rows={browserFindings} />
+  );
   const findingsRows: ObservationRow[] =
     observedSource && measuredDefaultVisit && observedSource.excerpt
       ? [
@@ -2526,7 +2545,7 @@ export function ReportContent({
           {analysisOverview}
           {privacyProfileAdvice}
           <ReportObservations rows={findingsRows} />
-          <ContextFindings rows={browserFindings} />
+          {browserFindingsSection}
           {findings.some(critical) && (
             <Section title="Critical privacy findings">
               <ul className="space-y-3 [&_li]:grid [&_li]:gap-1 [&_li]:border-b [&_li]:border-separator [&_li]:py-2">
@@ -2575,7 +2594,7 @@ export function ReportContent({
           ))}
           {privacyProfileAdvice}
           <ReportObservations rows={findingsRows} />
-          <ContextFindings rows={browserFindings} />
+          {browserFindingsSection}
 
           {ratingComparison}
           {adPreview && (
