@@ -529,7 +529,7 @@ function RatingCalculation({
                             −{item.cost}
                           </strong>
                           <div className="flex flex-wrap gap-x-3 text-xs">
-                            {item.evidenceIds
+                            {[...new Set(item.evidenceIds)]
                               .filter((id) => evidenceById.has(id))
                               .map((id, index) => (
                                 <a

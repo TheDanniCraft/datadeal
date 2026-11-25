@@ -232,8 +232,10 @@ export function inventoryCostsFor(
       consentPenalty: withoutConsent,
       reason: c?.reason ?? "Not classified.",
       evidenceIds: [
-        ...item.evidenceIds,
-        ...(c?.citation ? [c.citation.evidenceId] : []),
+        ...new Set([
+          ...item.evidenceIds,
+          ...(c?.citation ? [c.citation.evidenceId] : []),
+        ]),
       ].slice(0, 8),
       unknown: !c || c.purpose === "unknown",
     });

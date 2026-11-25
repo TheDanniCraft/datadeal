@@ -290,4 +290,23 @@ describe("rules", () => {
     ).toBeUndefined();
     expect(inventoryRating({}, "accepted")).toBeUndefined();
   });
+
+  test("evidence ids are unique when the citation repeats an item source", () => {
+    const morgen = recipient("morgen.so", {
+      phases: ["on_use"],
+      evidenceIds: ["document-1-section-4"],
+    });
+    const c = {
+      ...classify(morgen, "support", "processor"),
+      basis: "site_policy" as const,
+      citation: {
+        evidenceId: "document-1-section-4",
+        quote: "We use Morgen for bookings.",
+      },
+    };
+    const r = rate(inventory([[morgen, c]]));
+    expect(r.inventoryAssessment?.costs[0].evidenceIds).toEqual([
+      "document-1-section-4",
+    ]);
+  });
 });
