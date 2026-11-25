@@ -169,7 +169,7 @@ export function scanCoverage(
   let c = 1;
   if (report.consentCoverage?.rejected !== "measured") {
     c *= w.rejectUntested;
-    reasons.push("the reject choice could not be tested");
+    reasons.push("the reject option couldn't be tested");
   }
   const sampled =
     report.pageSample?.pages.filter((p) => p.coverage.accepted === "measured")
@@ -180,14 +180,13 @@ export function scanCoverage(
       : sampled === 1
         ? w.oneSampledPage
         : w.severalSampledPages;
-  reasons.push(
+  const pages =
     sampled === 0
-      ? "only the homepage was measured"
-      : `the homepage and ${sampled} sampled ${sampled === 1 ? "page were" : "pages were"} measured`,
-  );
+      ? "We tested the homepage only."
+      : `We tested the homepage and ${sampled} other ${sampled === 1 ? "page" : "pages"}.`;
   if (inventory.recipients.some(declaredOnly)) {
     c *= w.featuresUntested;
-    reasons.push("features named in the policy were not tried");
+    reasons.push("features named in the policy weren't tried");
   }
   const limited =
     inventory.truncated ||
@@ -200,10 +199,10 @@ export function scanCoverage(
     );
   if (limited) {
     c *= w.captureLimited;
-    reasons.push("the capture hit its size limits");
+    reasons.push("some traffic was too large to inspect fully");
   }
   c *= 1 - w.unknownShare * unknownShare;
-  return { coverage: c, reasons };
+  return { coverage: c, reasons, pages };
 }
 
 export function inventoryCostsFor(
@@ -288,7 +287,7 @@ export function inventoryRating(
   const raw = Math.max(0, 100 - combineCosts(costs.map(({ cost }) => cost)));
   const unknown = costs.filter((c) => c.unknown).length;
   const classified = inventory.classifications.length;
-  const { coverage, reasons } = scanCoverage(
+  const { coverage, reasons, pages } = scanCoverage(
     report,
     inventory,
     costs.length ? unknown / costs.length : 0,
@@ -305,7 +304,15 @@ export function inventoryRating(
     confidence,
     adjustments: [],
     inventoryAssessment: {
-      coverage: `Coverage ${Math.round(coverage * 100)}%: ${reasons.join(", ")}. Based on ${inventory.storage.length} storage ${inventory.storage.length === 1 ? "item" : "items"} and ${inventory.recipients.length} outside ${inventory.recipients.length === 1 ? "recipient" : "recipients"} measured on the tested pages${inventory.research.length ? `, with ${inventory.research.length} vendor ${inventory.research.length === 1 ? "policy" : "policies"} researched` : ""}. ${unknown ? `${unknown} could not be identified and lower the confidence.` : "Every item was identified."}`,
+      coverage: [
+        pages,
+        reasons.length &&
+          reasons.join(", and ").replace(/^./, (c) => c.toUpperCase()) + ".",
+        unknown > 0 &&
+          `${unknown} ${unknown === 1 ? "item" : "items"} couldn't be identified.`,
+      ]
+        .filter(Boolean)
+        .join(" "),
       costs: costs
         .filter(({ cost }) => cost > 0)
         .slice(0, 48)

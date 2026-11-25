@@ -137,11 +137,7 @@ export function ReportContentPages({
             </Accordion.Heading>
             <Accordion.Panel>
               <Accordion.Body>
-                <p>
-                  Selected from {sample.discoveryLimited ? "at least " : ""}
-                  {sample.discovered} eligible URLs.
-                </p>
-                <dl className="mt-2 space-y-2 text-sm text-muted">
+                <dl className="space-y-2 text-sm text-muted">
                   {sample.pages.map((page) => {
                     const missing = gaps.filter(
                       (gap) => gap.path === page.path,

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AccountLink, AccountIcon } from "../account/account-ui";
-import { ApiExample, ApiRates, ApiAvailability } from "./api-reference";
+import { ApiExample, ApiRates } from "./api-reference";
 import { Chip } from "@heroui/react/chip";
 
 export const metadata = {
@@ -73,11 +73,7 @@ export default function DevelopersPage() {
             <AccountLink href="/account/developer" secondary>
               Manage API tokens
             </AccountLink>
-            <p>
-              Set <code>DATADEAL_URL</code> to your local server origin and{" "}
-              <code>DATADEAL_TOKEN</code> to the token. Send the token in the
-              Authorization header.
-            </p>
+            <p>Send the token in the Authorization header.</p>
             <ApiExample />
           </section>
           <section id="usage">
@@ -86,15 +82,11 @@ export default function DevelopersPage() {
             </h2>
             <ApiRates />
             <p>
-              API credits are purchased separately from a Pro subscription. Your
-              developer account shows the balance, debits and refunds. We return
-              scan credits automatically if the scan fails or cannot produce a
-              usable result. This includes a blocked consent test that yields
-              only an unrated first visit. A readable privacy policy or a
-              successful visit to a site without a cookie banner can still
-              qualify as a result. Retries use the original charge.
+              API credits are bought separately from a Pro subscription. Your
+              developer account shows the balance, debits and refunds. Failed or
+              unusable scans are refunded automatically, and retries aren't
+              charged twice.
             </p>
-            <ApiAvailability />
           </section>
           <section id="endpoints">
             <h2 className="text-xl font-semibold tracking-tight">Endpoints</h2>

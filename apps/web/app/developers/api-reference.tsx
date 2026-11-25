@@ -1,6 +1,5 @@
 import { Card } from "@heroui/react/card";
 import {
-  developerApiPreview,
   developerReportReadCost,
   developerScanCost,
 } from "../../lib/developer-token";
@@ -26,15 +25,6 @@ export function ApiRates() {
     </dl>
   );
 }
-export function ApiAvailability() {
-  return (
-    <p className="text-sm text-muted">
-      {developerApiPreview
-        ? "API access is available on this local development server."
-        : "The API is currently available only in the local development preview."}
-    </p>
-  );
-}
 export function ApiExample() {
   return (
     <Card variant="secondary" className="min-w-0 p-5">
@@ -45,7 +35,7 @@ export function ApiExample() {
         <pre className="whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed">
           <code>
             {
-              'curl "$DATADEAL_URL/api/v1/developer/reports/example.org" \\\n  -H "Authorization: Bearer $DATADEAL_TOKEN"'
+              'curl "https://datadeal.app/api/v1/developer/reports/example.org" \\\n  -H "Authorization: Bearer $DATADEAL_TOKEN"'
             }
           </code>
         </pre>

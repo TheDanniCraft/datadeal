@@ -17,14 +17,14 @@ const exampleHistory = [
   { period: "Later scan", rating: 73 },
 ];
 const exampleFindings = [
-  ["First-party host", "The example policy names the operator as the host."],
-  ["Booking service", "The example flow includes a scheduling provider."],
-  ["Policy excerpt", "Look up the wording behind a policy claim."],
-  ["Browser observation", "Inspect the source for a measured browser visit."],
+  [
+    "Every provider",
+    "See who receives data and what the policy says about them.",
+  ],
+  ["Policy wording", "Read the exact passage behind each claim."],
+  ["Browser evidence", "Open the recorded visit behind each finding."],
 ];
 
-// This component accepts an illustrative graph and a separate entitlement control.
-// Every table, chart, timeline and finding below uses only the local examples.
 export function AdvancedPreview({
   graph,
   reward,
@@ -35,7 +35,7 @@ export function AdvancedPreview({
   return (
     <Card
       role="region"
-      aria-label="Advanced report preview"
+      aria-label="Pro report features"
       className="report-preview mt-3 gap-0 overflow-hidden rounded-2xl border border-separator bg-surface p-0 shadow-none"
     >
       <Card.Content className="grid gap-0 p-0 sm:grid-cols-[1.15fr_1fr]">
@@ -63,7 +63,7 @@ export function AdvancedPreview({
             {graph}
           </div>
           <figcaption className="mt-1 text-center text-xs text-muted">
-            Example data flow
+            Sample data flow
           </figcaption>
         </figure>
       </Card.Content>
@@ -77,18 +77,15 @@ export function AdvancedPreview({
           >
             <span className="inline-flex items-center gap-2 text-sm font-medium">
               <ReportIcon name="glance" />
-              Explore the example
+              What&apos;s in the full report
             </span>
             <span className="inline-flex items-center gap-2 text-xs font-normal text-muted">
-              Fictional data <Disclosure.Indicator />
+              Sample <Disclosure.Indicator />
             </span>
           </Button>
         </Disclosure.Heading>
         <Disclosure.Content>
           <Disclosure.Body className="report-preview-backdrop grid min-w-0 gap-6 border-t border-separator p-5 sm:grid-cols-2 sm:p-6">
-            <p className="m-0 text-sm leading-relaxed text-muted sm:col-span-2">
-              These examples show how a report works for a fictional website.
-            </p>
             <div className="min-w-0">
               <h4 className="text-sm font-semibold">Consent comparison</h4>
               <ConsentTable
@@ -114,7 +111,7 @@ export function AdvancedPreview({
               <LineChart data={exampleHistory} height={62}>
                 <LineChart.Line
                   dataKey="rating"
-                  name="Example rating"
+                  name="Rating"
                   stroke="var(--chart-2)"
                   strokeWidth={2}
                   dot={{ r: 2 }}
@@ -136,9 +133,7 @@ export function AdvancedPreview({
               </Timeline>
             </div>
             <div className="min-w-0 sm:col-span-2">
-              <h4 className="mb-2 text-sm font-semibold">
-                Example policy change
-              </h4>
+              <h4 className="mb-2 text-sm font-semibold">Policy change</h4>
               <dl className="grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[auto_1fr]">
                 <dt className="font-medium">Previous wording</dt>
                 <dd>“We keep booking details for one year.”</dd>

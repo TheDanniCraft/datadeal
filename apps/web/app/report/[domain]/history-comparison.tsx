@@ -24,10 +24,6 @@ export function HistoryComparison({
     <div className="mb-5 grid min-w-0 gap-1 wrap-anywhere">
       {score && (
         <ProviderDisclosure label="What changed the score">
-          <p>
-            The lowest rated practice on each accept-all visit determined its
-            score.
-          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             {([score.earlier, score.later] as const).map((visit, index) => (
               <div

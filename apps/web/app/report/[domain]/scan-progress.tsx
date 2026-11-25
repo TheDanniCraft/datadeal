@@ -7,9 +7,9 @@ import { useEffect, useState } from "react";
 
 const stageLabel: Record<ScanState, string> = {
   requested: "Scan requested",
-  queued: "Waiting for a worker",
+  queued: "Waiting to start",
   discovering: "Discovering source documents",
-  fetching: "Worker is gathering evidence",
+  fetching: "Gathering evidence",
   rendering: "Measuring the browser visit",
   extracting: "Extracting document excerpts",
   technically_analyzing: "Analyzing browser observations",
@@ -59,12 +59,12 @@ export function ScanProgress({
         {expanded && (
           <ChainOfThought.Steps>
             <ChainOfThought.Step label="Request received">
-              This domain has a scan request.
+              Done
             </ChainOfThought.Step>
             {stages.length ? (
               stages.map((phase, index) => (
                 <ChainOfThought.Step key={phase} label={phases[phase]}>
-                  {index === stages.length - 1 ? "Current stage" : "Attempted"}
+                  {index === stages.length - 1 ? "In progress" : "Done"}
                 </ChainOfThought.Step>
               ))
             ) : (

@@ -160,10 +160,7 @@ function TestOffer({
     };
     const onRender = (event: Events["slotRenderEnded"]) => {
       if (active && event.slot === slot && event.isEmpty)
-        stop(
-          "Google returned an empty ad slot. Availability can vary and Google doesn’t give us a personal viewing limit or a retry time.",
-          true,
-        );
+        stop("No ad is available right now. Try again later.", true);
     };
     const script = publisherScript(limited);
     if (!script) {

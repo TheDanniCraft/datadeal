@@ -38,7 +38,6 @@ export function RefreshWithPoints({ balance }: { balance: number }) {
       </h2>
       <p className="text-sm">
         Spend {cost} report points to request a new scan of an existing report.
-        The regular Rescan button is free. Both use the same queue and cooldown.
         If the scan fails to produce usable evidence, your points are returned.
       </p>
       <form

@@ -1,10 +1,11 @@
 "use client";
-import { Accordion, Card, Chip } from "@heroui/react";
+import { Accordion, Card } from "@heroui/react";
 import {
-  practiceRubric,
+  breadth,
+  consentPenalty,
   grades,
+  inventoryCosts,
   methodologyVersion,
-  contextualRulesRevision,
 } from "@datadeal/scoring";
 import { ratingGuidance } from "../../lib/rating-guidance";
 
@@ -18,13 +19,25 @@ const ratingColors = {
 } as const;
 const headingStyle = "mb-4 text-2xl font-semibold tracking-tight";
 
+const costLabels: [keyof typeof inventoryCosts, string][] = [
+  [
+    "contactAdvertising",
+    "Your email address reaches an ad or tracking company",
+  ],
+  ["linkedAdvertising", "An ID is sent to an ad or tracking company"],
+  ["advertisingId", "An advertising ID is stored in your browser"],
+  ["analyticsId", "An analytics ID is stored in your browser"],
+  ["independentRecipient", "Data goes to a company that uses it for itself"],
+  ["advertisingStorage", "Advertising storage without an ID"],
+  ["unknownIdentifier", "An ID we couldn't identify"],
+  ["contractAnalytics", "Analytics run for the site, without a lasting ID"],
+  ["proportionate", "Needed for the site to work, such as login or a cart"],
+];
+
 export function MethodologyPage() {
   return (
     <article className="mx-auto w-full max-w-4xl space-y-10 py-10 sm:space-y-12 sm:py-16">
       <div className="max-w-2xl">
-        <Chip size="sm" variant="soft">
-          Methodology {methodologyVersion}
-        </Chip>
         <h1 className="my-3 text-4xl font-semibold leading-tight tracking-tight sm:text-6xl">
           Scoring methodology
         </h1>
@@ -73,93 +86,69 @@ export function MethodologyPage() {
         <h2 id="calculation" className={headingStyle}>
           How the score is calculated
         </h2>
-        <p className="max-w-prose leading-relaxed">
-          We rate each practice we can verify for the tested visit. The lowest
-          supported practice score sets the scenario rating. A cookie and the
-          request carrying its value describe one practice. Seeing it on several
-          pages does not lower the rating again.
-        </p>
+        <div className="max-w-prose space-y-3 leading-relaxed">
+          <p>
+            Every site starts at 100. We list each cookie, stored value and
+            outside connection from the visit, find out who receives it and why,
+            and give each item a cost. A cookie that keeps you logged in costs
+            nothing. An advertising ID shared with a data broker costs a lot.
+          </p>
+          <p>
+            The largest cost counts in full. Everything else adds a smaller
+            amount that grows slowly with how much there is, up to {breadth.cap}{" "}
+            points. Anything that starts before you make a cookie choice costs{" "}
+            {Math.round((consentPenalty - 1) * 100)}% more.
+          </p>
+          <p>
+            The headline score rates the visit after you accept all cookies.
+            When part of the site could not be tested, the score moves toward
+            the middle of the scale, because we can&apos;t vouch for what we
+            didn&apos;t see.
+          </p>
+        </div>
         <Accordion className="mt-4">
-          <Accordion.Item id="practices">
+          <Accordion.Item id="costs">
             <Accordion.Heading>
               <Accordion.Trigger>
-                Scores by practice and consent choice
+                What each item costs
                 <Accordion.Indicator />
               </Accordion.Trigger>
             </Accordion.Heading>
             <Accordion.Panel>
-              <Accordion.Body className="space-y-4 text-foreground">
-                <p>
-                  Each score below requires the observed data, operation and
-                  timing described in that row. Claims about the recipient’s
-                  role, purpose or necessity require a supporting policy
-                  passage.
-                </p>
-                <ul className="list-none divide-y divide-border">
-                  {Object.entries(practiceRubric).map(([rule, item]) => (
-                    <li key={rule} className="space-y-2 py-3">
-                      <p>{item.label}</p>
-                      <dl className="grid max-w-sm grid-cols-3 gap-x-2 text-sm">
-                        {(
-                          [
-                            ["Before choice", item.default],
-                            ["Rejected", item.rejected],
-                            ["Accepted all", item.accepted],
-                          ] as const
-                        ).map(([label, value]) => (
-                          <div key={label}>
-                            <dt className="text-muted">{label}</dt>
-                            <dd className="font-medium tabular-nums">
-                              {value ?? "Unrated"}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
+              <Accordion.Body className="text-foreground">
+                <ul className="m-0 list-none divide-y divide-border p-0">
+                  {costLabels.map(([key, label]) => (
+                    <li
+                      key={key}
+                      className="flex items-baseline justify-between gap-4 py-2.5"
+                    >
+                      <span>{label}</span>
+                      <span className="shrink-0 font-medium tabular-nums">
+                        −{inventoryCosts[key]}
+                      </span>
                     </li>
                   ))}
                 </ul>
-                <p>
-                  The headline normally rates the measured visit after accepting
-                  all optional features. If the scanner finds no consent
-                  controls, we can rate the signed-out visit when the homepage
-                  and sampled pages show no outside requests or end-of-visit
-                  storage and the site's visitor policy explicitly rules out
-                  cookies and personal data collection. These ratings say “No
-                  choice detected.” Unconfirmed choices and incomplete evidence
-                  can leave a site unrated.
-                </p>
               </Accordion.Body>
             </Accordion.Panel>
           </Accordion.Item>
           <Accordion.Item id="coverage">
             <Accordion.Heading>
               <Accordion.Trigger>
-                When a scan qualifies for a rating
+                When a site stays unrated
                 <Accordion.Indicator />
               </Accordion.Trigger>
             </Accordion.Heading>
             <Accordion.Panel>
               <Accordion.Body className="max-w-prose space-y-3 text-foreground">
                 <p>
-                  Each scenario needs a completed visit in a fresh browser
-                  context. For advertising or analytics we check the data class,
-                  purpose, recipient, consent phase and supporting citations. To
-                  link a stored identifier to a request we require an exact
-                  match inside that visit. Only the match result is retained.
+                  We need a completed visit with a working &ldquo;Accept
+                  all&rdquo; button. Without one, the report still shows what we
+                  found but doesn&apos;t give a number.
                 </p>
                 <p>
-                  A conditional policy statement explains what may happen. A
-                  request attempt, unknown provider or unreadable payload leaves
-                  questions open. A payment, conversation or security cookie can
-                  support a feature the visitor requested.
-                </p>
-                <p>
-                  Favorable ratings are provisional. They need complete
-                  inspection of the selected pages, policy citations about
-                  purpose and sharing, and an assessment of each observed
-                  practice. Unknown recipients, truncated coverage or missing
-                  analysis can leave a visit unrated. Signed-in activity and
-                  later server-side processing remain outside the test.
+                  What happens after you sign in, or on the company&apos;s
+                  servers later, is outside what a browser visit can see.
                 </p>
               </Accordion.Body>
             </Accordion.Panel>
@@ -168,10 +157,7 @@ export function MethodologyPage() {
       </section>
       <footer className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-border pt-4 text-sm">
         <strong>Version {methodologyVersion}</strong>
-        <span>
-          This version uses {contextualRulesRevision}. Each published report
-          keeps the evidence and rules used to calculate its rating.
-        </span>
+        <span>Each report keeps the evidence behind its rating.</span>
       </footer>
     </article>
   );

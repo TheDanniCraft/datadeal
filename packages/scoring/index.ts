@@ -23,6 +23,8 @@ export {
   combineCosts,
   inventoryCosts,
   inventoryRulesRevision,
+  consentPenalty,
+  breadth,
 } from "./inventory";
 export { grades, gradeForScore, methodologyVersion };
 export const rulesRevision = "browser-evidence-3";

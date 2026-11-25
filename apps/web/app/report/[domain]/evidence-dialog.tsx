@@ -634,9 +634,7 @@ function VisitSummary({
         </div>
       )}
       <details className="text-sm">
-        <summary className="cursor-pointer text-muted">
-          Full capture notes
-        </summary>
+        <summary className="cursor-pointer text-muted">Visit details</summary>
         <p className="mt-2 whitespace-pre-line leading-relaxed text-muted wrap-anywhere">
           {notes}
         </p>

@@ -189,7 +189,7 @@ describe("coverage", () => {
     const r = rate(clean(), "accepted", homepageOnly);
     expect(r.score).toBe(92);
     expect(r.inventoryAssessment?.coverage).toMatch(
-      /reject choice could not be tested.*only the homepage/,
+      /homepage only.*reject option couldn't be tested/,
     );
   });
   test("unknown items reduce coverage and confidence", () => {
@@ -249,7 +249,7 @@ describe("rules", () => {
       /^When you use a feature: morgen\.so/,
     );
     expect(r.inventoryAssessment?.coverage).toMatch(
-      /features named in the policy were not tried/,
+      /features named in the policy weren't tried/i,
     );
     expect(r.score).toBe(96);
     // Not part of the before-choice visit.

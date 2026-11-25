@@ -23,7 +23,7 @@ const browserGuides = [
   {
     browser: "Chrome",
     instructions:
-      "In Settings → Privacy and security → Third-party cookies & site data, look under Site requests for the opt-out request. Google is rolling this out to eligible profiles in California. Do Not Track is a separate preference. To inspect an ad blocker, open Extensions → Manage extensions.",
+      "In Settings → Privacy and security → Third-party cookies & site data, look under Site requests for the opt-out request. Do Not Track is a separate preference. To inspect an ad blocker, open Extensions → Manage extensions.",
     sources: [
       [
         "Chrome opt-out requests",
@@ -172,14 +172,6 @@ export function AdvertisingFaq() {
           Website scans, storage, and keeping the service running cost money.
           Ads and subscriptions fund the service so anyone can read the core
           report.
-        </p>
-      </details>
-      <details id="rating">
-        <summary>How would advertising affect DataDeal’s own rating?</summary>
-        <p>
-          DataDeal applies the same evidence rules to itself. An assessment
-          should show what changes when visitors accept advertising, reject it,
-          or use a signed-in Pro account.
         </p>
       </details>
     </div>

@@ -363,7 +363,7 @@ export async function scan(
       id: "homepage-http-cookies",
       kind: "observed_technical",
       url: homepage.url.href,
-      excerpt: `The final homepage HTTP response included ${homepage.cookies.count} Set-Cookie headers. This observation excludes scripts, browser storage, and consent interactions.`,
+      excerpt: `The final homepage HTTP response included ${homepage.cookies.count} Set-Cookie headers.`,
       observation: homepage.cookies,
       retrievedAt: new Date().toISOString(),
       scanId: id,
@@ -383,8 +383,7 @@ export async function scan(
     evidence.push({
       id: "homepage-dns-cname",
       kind: "inferred_infrastructure",
-      excerpt:
-        "A DNS CNAME lookup returned one or more routing aliases. This is evidence about name resolution, not about which company processes data or where it is stored.",
+      excerpt: "The domain is routed through these hosts.",
       observation: { type: "dns_cname", targets },
       retrievedAt: new Date().toISOString(),
       scanId: id,

@@ -1,11 +1,7 @@
 import Link from "next/link";
 import { Card } from "@heroui/react/card";
 import { AccountIcon, AccountLink, AccountScreen } from "../account-ui";
-import {
-  ApiRates,
-  ApiExample,
-  ApiAvailability,
-} from "../../developers/api-reference";
+import { ApiRates, ApiExample } from "../../developers/api-reference";
 import { headers } from "next/headers";
 import { auth } from "../../../lib/auth";
 import { purchasableCreditPack } from "../../../lib/billing";
@@ -99,7 +95,6 @@ export default async function DeveloperAccountPage({
             scan’s status for free. API credits are separate from a Pro
             subscription.
           </p>
-          <ApiAvailability />
         </section>
       </div>
     );
@@ -197,10 +192,7 @@ export default async function DeveloperAccountPage({
                 <h3 className="pt-5 text-lg font-semibold">
                   Earlier credit activity
                 </h3>
-                <p>
-                  Balance recorded before Creem Customer Credits:{" "}
-                  {legacy.balance}.
-                </p>
+                <p>Earlier balance: {legacy.balance}.</p>
                 <ul className="divide-y divide-separator [&>li]:space-y-2 [&>li]:py-4">
                   {legacy.entries.map((entry) => (
                     <li key={entry.id}>

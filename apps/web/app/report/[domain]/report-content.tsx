@@ -512,8 +512,9 @@ function RatingCalculation({
                   <p>{score.inventoryAssessment.coverage}</p>
                   <p>
                     Each item below costs points. The largest cost counts in
-                    full, the next one half, the next a quarter, and so on.
-                    Anything that starts before you choose costs 50% more.
+                    full; the rest add a smaller amount that grows slowly with
+                    how much there is. Anything that starts before you choose
+                    costs 50% more.
                   </p>
                   {score.inventoryAssessment.costs.length ? (
                     <ul className="m-0! list-none divide-y divide-separator p-0!">
@@ -559,7 +560,6 @@ function RatingCalculation({
                 </>
               ) : score.practiceAssessment ? (
                 <>
-                  <p>{score.practiceAssessment.coverage}</p>
                   {score.score !== null && (
                     <p>
                       The lowest supported practice rating determines the score
@@ -686,21 +686,15 @@ function RatingCalculation({
                 !score.inventoryAssessment &&
                 score.baseScore != null && (
                   <p>
-                    Historical scoring rules. {score.baseScore}{" "}
-                    {netAdjustment < 0 ? "−" : "+"} {Math.abs(netAdjustment)} ={" "}
+                    {score.baseScore} {netAdjustment < 0 ? "−" : "+"}{" "}
+                    {Math.abs(netAdjustment)} ={" "}
                     {score.baseScore + netAdjustment} points.
-                    {score.baseScore + netAdjustment !== score.score &&
-                      " The published total is shown above."}
                   </p>
                 )}
               <p>
                 <a className="inline-link" href="/methodology">
                   See the scoring scale
                 </a>
-                {" · Methodology "}
-                {score.methodologyVersion}
-                {score.rulesRevision &&
-                  " · Rules revision " + score.rulesRevision}
               </p>
             </Accordion.Body>
           </Accordion.Panel>
@@ -846,6 +840,35 @@ function DestinationVisits({ visits }: { visits: DestinationVisit[] }) {
       ))}
     </ul>
   );
+}
+
+const scenarioNames = {
+  default: "before a choice",
+  rejected: "reject all",
+  accepted: "accept all",
+} as const;
+
+function technicalSourceTitle(source: ReportEvidence) {
+  const o = source.observation;
+  if (o?.type === "policy_section") return o.heading;
+  if (o?.type === "browser_consent_counts")
+    return source.consentScenario
+      ? `Homepage visit (${scenarioNames[source.consentScenario]})`
+      : "Homepage visit";
+  if (o?.type === "browser_content_page") return "Page visit";
+  if (o?.type === "dns_cname") return "DNS lookup";
+  if (o?.type === "html_resource_hosts") return "Homepage HTML";
+  if (o?.type === "response_cookie_attributes") return "Cookie headers";
+  if (o?.type === "provider_policy") return o.providerHost + " privacy policy";
+  return source.url ? new URL(source.url).hostname : "Source";
+}
+
+function jobStateLabel(state: string) {
+  if (state === "completed") return "Completed";
+  if (state === "partially_completed") return "Partial";
+  if (state === "failed") return "Failed";
+  if (state === "requested" || state === "queued") return "Queued";
+  return "In progress";
 }
 
 export function Flow({
@@ -1192,11 +1215,10 @@ export function Flow({
       {network}
       <p className="text-sm text-muted" id={helpId}>
         <span className="flow-pointer-help [@media(any-pointer:coarse)]:hidden">
-          Drag or use the arrow keys to move the graph, and Ctrl + scroll or the
-          + and − buttons to zoom.{" "}
+          Drag to move, Ctrl + scroll to zoom.{" "}
         </span>
         <span className="flow-touch-help hidden [@media(any-pointer:coarse)]:inline">
-          Use Drag graph to move around the canvas.{" "}
+          Use Drag graph to move around.{" "}
         </span>
         Select a connection to see its evidence.
       </p>
@@ -1420,13 +1442,6 @@ export function Flow({
       {otherScans.length > 0 && (
         <section className="mt-8" aria-label="Other scans with this provider">
           <h3>Other scans with this provider</h3>
-          <p className="text-sm text-muted">
-            These browser visits attempted a request to{" "}
-            {leafReferences?.provider === active.label
-              ? active.label
-              : currentHost}
-            .
-          </p>
           <ul className="space-y-2 [&_li]:border-b [&_li]:border-separator [&_li]:py-2 [&_li]:target:bg-accent/10 [&_summary]:cursor-pointer">
             {otherScans.map(({ domain, scanId, evidenceId, responded }) => (
               <li key={domain}>
@@ -1508,10 +1523,7 @@ function ScoreHistoryChart({
         />
       </LineChart>
       {data.some(({ score }) => score === null) && (
-        <p className="text-sm text-muted">
-          Gaps mark scans without a comparable score. Open a scan below to see
-          its result.
-        </p>
+        <p className="text-sm text-muted">Gaps are scans without a score.</p>
       )}
     </div>
   );
@@ -1706,8 +1718,8 @@ export function ReportContent({
       visits,
       observed: true,
       explanation: visits.some(({ responded }) => responded)
-        ? "The browser observed an HTTP response to a request for this domain."
-        : "The browser attempted a request to this domain.",
+        ? "The browser connected to this domain."
+        : "The browser tried to connect to this domain.",
     }),
   );
   for (const source of report?.evidence ?? []) {
@@ -1742,8 +1754,8 @@ export function ReportContent({
           label,
           explanation:
             label === selfHosted
-              ? `The policy says the site runs its own ${localPlausible ? "Plausible" : selfHostedService?.[1]} instance on this subdomain. This disclosure alone does not establish a transfer to a separate company.`
-              : `The policy names this provider in “${source.observation.heading}”. The scan has not confirmed that this provider received personal data.`,
+              ? `The policy says the site runs its own ${localPlausible ? "Plausible" : selfHostedService?.[1]} instance on this subdomain. `
+              : `Named in the policy under “${source.observation.heading}”. Not seen during the visit.`,
           evidenceIds: [source.id],
           declared: true,
         });
@@ -1849,7 +1861,7 @@ export function ReportContent({
   );
   const coverageDetails = browserVisits.length > 0 &&
     missingChoices.length > 0 && (
-      <ProviderDisclosure label="Scan coverage">
+      <ProviderDisclosure label="What wasn't tested">
         <p>
           The recorded homepage visits are{" "}
           {measuredChoices.map(([, label]) => label.toLowerCase()).join(", ")}.
@@ -2439,13 +2451,6 @@ export function ReportContent({
                     style={{ width: Math.max(4, score.score) + "%" }}
                   />
                 </div>
-                {!score.practiceAssessment &&
-                  !score.inventoryAssessment &&
-                  !report?.demo && (
-                    <span className="text-[.68rem] text-muted">
-                      Earlier scoring rules
-                    </span>
-                  )}
               </>
             ) : (
               <div className="grid gap-0.5">
@@ -2483,7 +2488,7 @@ export function ReportContent({
               </EmptyState.Title>
               <EmptyState.Description>
                 {current === "queued"
-                  ? "This scan is waiting for a worker."
+                  ? "Your scan is in line and will start shortly."
                   : scanActive
                     ? "DataDeal is gathering public privacy evidence."
                     : current === "failed"
@@ -2623,7 +2628,7 @@ export function ReportContent({
                             "Analytics service",
                           ].map((label) => ({
                             label,
-                            explanation: "Illustrative service",
+                            explanation: "Sample service",
                             evidenceIds: [],
                             declared: true,
                           }))}
@@ -2650,10 +2655,6 @@ export function ReportContent({
               )}
               {policyTopics.length > 0 && (
                 <Section title="Topics in the privacy policy">
-                  <p className="text-sm text-muted">
-                    Where the privacy policy talks about each topic. Open a
-                    section to read the quoted passages.
-                  </p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {Object.entries(policyTopicLabels).map(([topic, label]) => {
                       // One row per policy section; a long section can supply
@@ -2717,9 +2718,7 @@ export function ReportContent({
                 <Section title="Consent comparison">
                   {postChoiceComparison}
                   <p className="text-sm text-muted">
-                    Each row covers a whole homepage visit, including activity
-                    before a choice. Outside domains can belong to the same
-                    operator.
+                    Outside domains can belong to the same company.
                   </p>
                   <ConsentTable
                     label="Observed consent scenarios and end-of-visit measurements"
@@ -2804,7 +2803,7 @@ export function ReportContent({
                 ) : !resourceEvidence &&
                   !routingEvidence &&
                   !flowDestinations.length ? (
-                  <p>No service inventory is available for this scan.</p>
+                  <p>No outside services detected.</p>
                 ) : null}
                 {flowDestinations.some(({ declared }) => declared) && (
                   <ProviderDisclosure label="Services named in the privacy policy">
@@ -2833,11 +2832,7 @@ export function ReportContent({
                   <ProviderDisclosure
                     label={`External domains observed in browser visits (${attemptedDestinations.size})`}
                   >
-                    <p>
-                      This inventory comes from the visits DataDeal could
-                      measure. A request or response alone does not establish
-                      the purpose of the request or what data was sent.
-                    </p>
+                    <p>A request alone doesn&apos;t show what data was sent.</p>
                     <ul className="space-y-2 [&_li]:border-b [&_li]:border-separator [&_li]:py-2 [&_li]:target:bg-accent/10 [&_summary]:cursor-pointer">
                       {[...attemptedDestinations]
                         .sort(([a], [b]) => a.localeCompare(b))
@@ -2858,10 +2853,6 @@ export function ReportContent({
                         <li key={target}>{target}</li>
                       ))}
                     </ul>
-                    <p>
-                      Routing aliases do not establish where personal data is
-                      stored.
-                    </p>
                     <a href={"#evidence-" + routingEvidence.id}>
                       View DNS evidence
                     </a>
@@ -2872,8 +2863,7 @@ export function ReportContent({
                   <>
                     <h3>Hosts referenced in homepage HTML</h3>
                     <p>
-                      Script and iframe tags referenced these hosts. A reference
-                      alone does not show what data a browser sends.
+                      Scripts and embeds on the homepage load from these hosts.
                     </p>
                     <ul className="space-y-2 [&_li]:border-b [&_li]:border-separator [&_li]:py-2 [&_li]:target:bg-accent/10 [&_summary]:cursor-pointer">
                       {resourceEvidence.observation.hosts.map((hostname) => (
@@ -2933,12 +2923,7 @@ export function ReportContent({
                     {technicalSources.map((source) => (
                       <li key={source.id} id={"evidence-" + source.id}>
                         <div>
-                          <h3>
-                            {source.observation?.type === "policy_section"
-                              ? source.observation.heading
-                              : source.id}{" "}
-                            · {source.kind.replaceAll("_", " ")}
-                          </h3>
+                          <h3>{technicalSourceTitle(source)}</h3>
                           <p>{source.excerpt}</p>
                           {source.observation?.type ===
                             "browser_consent_counts" && (
@@ -2952,8 +2937,7 @@ export function ReportContent({
                             "browser_consent_counts" &&
                             source.observation.afterChoice && (
                               <p>
-                                Requests from the consent click to the end of
-                                observation:{" "}
+                                Requests after the choice:{" "}
                                 {source.observation.afterChoice.requests}.
                                 {source.observation.afterChoice.externalDomains
                                   .length > 0 && (
@@ -3090,7 +3074,7 @@ export function ReportContent({
                             <time dateTime={item.date}>
                               {item.date.slice(0, 10)}
                             </time>{" "}
-                            · {item.state.replaceAll("_", " ")}
+                            · {jobStateLabel(item.state)}
                             {item.rating && (
                               <>
                                 {" "}
@@ -3101,13 +3085,6 @@ export function ReportContent({
                                       : `${item.rating.score}/100 · ${item.rating.grade}`}
                                   </Chip.Label>
                                 </Chip>
-                                <span className="text-sm text-muted">
-                                  {" · Methodology " +
-                                    item.rating.methodologyVersion}
-                                  {item.rating.rulesRevision &&
-                                    " · Rules revision " +
-                                      item.rating.rulesRevision}
-                                </span>
                                 {delta !== null && (
                                   <span className="text-sm text-muted">
                                     {" "}

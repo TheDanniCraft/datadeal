@@ -122,11 +122,11 @@ export function PrivacyPage() {
           <section aria-labelledby="account">
             <h2 id="account">Your account</h2>
             <p>
-              We use your email address to send a one-time sign-in link. In
-              production, Resend receives the address and email to deliver it.
-              The link expires in 10 minutes. A session cookie keeps you signed
-              in. Session records include dates and may include your IP address
-              and browser information.
+              We use your email address to send a one-time sign-in link. Resend
+              receives the address and email to deliver it. The link expires in
+              10 minutes. A session cookie keeps you signed in. Session records
+              include dates and may include your IP address and browser
+              information.
             </p>
             <p>
               Your account stores the features you use, including saved sites,

@@ -144,7 +144,32 @@ function observationHeadline(row: PracticeTakeaway) {
 
 export function ContextFindings({ rows }: { rows: PracticeTakeaway[] }) {
   const [showAll, setShowAll] = useState(false);
-  const groups = groupPracticeTakeaways(rows);
+  // Many facts read the same once summarized (one tracker on every sampled
+  // page). Show each distinct headline once and keep all of its evidence.
+  const merged = new Map<
+    string,
+    ReturnType<typeof groupPracticeTakeaways>[number] & { headline: string }
+  >();
+  for (const group of groupPracticeTakeaways(rows)) {
+    const { choice, observations } = group;
+    const first = observations[0]!;
+    const linked = !first.mismatch && first.linkedRequest;
+    const headline = choice
+      ? "Your browser remembers your cookie choice"
+      : linked
+        ? "An ID in your browser also reached " + linked.recipient
+        : first.quietVisit && !first.mismatch
+          ? "No outside requests on the tested " +
+            (observations.length > 1 ? "pages" : "page")
+          : observationHeadline(first);
+    const key =
+      headline + "|" + !!first.mismatch + "|" + !!linked + "|" + !!choice;
+    const existing = merged.get(key);
+    if (existing)
+      existing.observations = [...existing.observations, ...observations];
+    else merged.set(key, { ...group, headline });
+  }
+  const groups = [...merged.values()];
   if (!groups.length) return null;
   const visible = showAll ? groups : groups.slice(0, 3);
   return (
@@ -156,17 +181,9 @@ export function ContextFindings({ rows }: { rows: PracticeTakeaway[] }) {
         Browser findings
       </h2>
       <Accordion className="w-full">
-        {visible.map(({ id, choice, observations }) => {
+        {visible.map(({ id, choice, observations, headline }) => {
           const first = observations[0]!;
           const linked = !first.mismatch && first.linkedRequest;
-          const headline = choice
-            ? "Your browser remembers your cookie choice"
-            : linked
-              ? "An ID in your browser also reached " + linked.recipient
-              : first.quietVisit && !first.mismatch
-                ? "No outside requests on the tested " +
-                  (observations.length > 1 ? "pages" : "page")
-                : observationHeadline(first);
           const scenarios = [...new Set(observations.map(timing))];
           const unknowns = [
             ...new Set(observations.flatMap((row) => row.unknowns)),
