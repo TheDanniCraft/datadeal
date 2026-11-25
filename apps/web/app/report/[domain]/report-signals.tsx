@@ -85,16 +85,48 @@ export function signalList(signals: ReportSignals): Signal[] {
   return list;
 }
 
+/** A region code drawn in the same 24×24 box and stroke as the icons. */
+function RegionTag({ code }: { code: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
+      <rect x="1.5" y="5.5" width="21" height="13" rx="3.5" />
+      <text
+        x="12"
+        y="15.2"
+        textAnchor="middle"
+        fill="currentColor"
+        stroke="none"
+        fontSize="8.5"
+        fontWeight="700"
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+      >
+        {code}
+      </text>
+    </svg>
+  );
+}
+
 function Badge({ signal }: { signal: Signal }) {
   return (
     <span
       className={
-        "inline-flex h-5 items-center gap-0.5 text-[.68rem] font-semibold [&_svg]:size-4 " +
+        "inline-flex size-5 items-center justify-center [&_svg]:size-4 " +
         signal.tone
       }
     >
-      {signal.icon && <ReportIcon name={signal.icon} />}
-      {signal.text}
+      {signal.icon ? (
+        <ReportIcon name={signal.icon} />
+      ) : (
+        signal.text && <RegionTag code={signal.text} />
+      )}
     </span>
   );
 }
