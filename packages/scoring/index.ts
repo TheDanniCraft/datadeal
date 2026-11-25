@@ -83,9 +83,21 @@ function measuredHomepage(
   });
 }
 
+/**
+ * Inventory ratings are pure arithmetic over the stored classifications, so
+ * they are recomputed on read: a rule change reaches every report at once
+ * and history compares scans under the same rules.
+ */
+const liveInventory = (report: ScanReport) =>
+  !!report.storageInventory?.classifications.length;
+
 export function verifiedAcceptAllRating(report: ScanReport) {
   if (!report.partial && acceptAllHomepage(report))
-    return report.scoringCorrection?.accepted ?? report.acceptAllScoring;
+    return (
+      report.scoringCorrection?.accepted ??
+      (liveInventory(report) ? calculateAcceptAllScore(report) : undefined) ??
+      report.acceptAllScoring
+    );
 }
 
 /** An archived number alone cannot establish a change in a site's practices. */
@@ -118,7 +130,11 @@ export function acceptAllScoreChange(
 export function verifiedRejectRating(report: ScanReport) {
   if (report.partial || report.consentCoverage?.rejected !== "measured") return;
   if (measuredHomepage(report, "rejected")?.url)
-    return report.scoringCorrection?.rejected ?? report.rejectedScoring;
+    return (
+      report.scoringCorrection?.rejected ??
+      (liveInventory(report) ? calculateRejectScore(report) : undefined) ??
+      report.rejectedScoring
+    );
 }
 
 export function calculateRejectScore(report: ScanReport) {

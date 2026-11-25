@@ -358,6 +358,15 @@ const publishedScoring = z.object({
         .max(48),
       classifiedItems: z.number().int().nonnegative(),
       unknownItems: z.number().int().nonnegative(),
+      // The arithmetic behind the score, so a reader can follow it exactly.
+      breakdown: z
+        .object({
+          worst: z.number().min(0).max(100),
+          others: z.number().min(0).max(100),
+          otherItems: z.number().int().nonnegative(),
+          raw: z.number().min(0).max(100),
+        })
+        .optional(),
     })
     .optional(),
   adjustments: z.array(finding.extend({ adjustment: z.number().int() })),

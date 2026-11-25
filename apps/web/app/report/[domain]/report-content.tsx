@@ -3,6 +3,8 @@
 import Image from "next/image";
 import { AdvancedPreview } from "./report-illustrations";
 import { ReportIcon } from "./report-icon";
+import { combineCosts } from "@datadeal/scoring";
+import { pageName } from "../../../lib/content-pages";
 import { ReportCompare } from "./report-compare";
 import {
   citationColors,
@@ -446,6 +448,131 @@ function Section({
   );
 }
 
+type InventoryAssessment = NonNullable<Score["inventoryAssessment"]>;
+
+function InventoryBreakdown({
+  score,
+  assessment,
+  evidenceById,
+  headline,
+}: {
+  score: Score;
+  assessment: InventoryAssessment;
+  evidenceById: ReadonlyMap<string, ReportEvidence>;
+  headline: boolean;
+}) {
+  const costs = assessment.costs;
+  const exact = assessment.breakdown;
+  const combined = combineCosts(costs.map(({ cost }) => cost));
+  const worst = Math.round(exact?.worst ?? costs[0]?.cost ?? 0);
+  const raw = Math.round(exact?.raw ?? Math.max(0, 100 - combined));
+  // Rounded parts that add up to the rounded raw score.
+  const rest = Math.max(0, 100 - worst - raw);
+  const otherItems = exact?.otherItems ?? Math.max(0, costs.length - 1);
+  const pull = (score.score ?? raw) - raw;
+  // One line per company: its largest item.
+  const companies = new Map<string, (typeof costs)[number]>();
+  for (const item of costs) {
+    const key = item.vendor ?? item.label;
+    if (!companies.has(key)) companies.set(key, item);
+  }
+  const top = [...companies.entries()].slice(0, 5);
+  const steps: [string, string, string?][] = [
+    ["Start", "100"],
+    [
+      costs[0]
+        ? "Largest cost · " + (costs[0].vendor ?? costs[0].label)
+        : "Largest cost",
+      worst ? "−" + worst : "0",
+    ],
+    [
+      `Everything else · ${otherItems} ${otherItems === 1 ? "item" : "items"}`,
+      rest ? "−" + rest : "0",
+      "Grows slowly with the number of items, at most 30 points.",
+    ],
+  ];
+  if (pull)
+    steps.push([
+      "Parts we couldn't test",
+      (pull > 0 ? "+" : "−") + Math.abs(pull),
+      "When part of a site couldn't be tested, the score moves toward 50.",
+    ]);
+  return (
+    <div className="grid gap-4">
+      <p className="m-0! text-sm leading-relaxed">{score.verdict}</p>
+      <dl className="m-0! grid overflow-hidden rounded-2xl border border-separator text-sm">
+        {steps.map(([label, value, hint]) => (
+          <div
+            key={label}
+            className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 border-b border-separator px-4 py-2.5"
+          >
+            <dt className="min-w-0">
+              {label}
+              {hint && <span className="block text-xs text-muted">{hint}</span>}
+            </dt>
+            <dd className="m-0 self-center font-medium tabular-nums">
+              {value}
+            </dd>
+          </div>
+        ))}
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 bg-default/50 px-4 py-2.5 font-semibold">
+          <dt>Score</dt>
+          <dd className="m-0 tabular-nums">{score.score ?? "Unrated"}</dd>
+        </div>
+      </dl>
+      {top.length > 0 && (
+        <div className="grid gap-1">
+          <h3 className="m-0! text-sm font-semibold">Biggest costs</h3>
+          <ul className="m-0! list-none divide-y divide-separator p-0!">
+            {top.map(([name, item]) => {
+              const evidence = item.evidenceIds.find((id) =>
+                evidenceById.has(id),
+              );
+              return (
+                <li
+                  key={name}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 py-2 text-sm"
+                >
+                  <span className="min-w-0">
+                    {evidence ? (
+                      <a
+                        className="inline-link"
+                        href={"#evidence-" + evidence}
+                        aria-haspopup="dialog"
+                      >
+                        {name}
+                      </a>
+                    ) : (
+                      name
+                    )}
+                    {item.consentPenalty && (
+                      <span className="text-muted"> · before you choose</span>
+                    )}
+                  </span>
+                  <span className="font-medium tabular-nums">
+                    −{Math.round(item.cost)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          {headline && (
+            <a className="inline-link text-sm" href="#companies-title">
+              See every company
+            </a>
+          )}
+        </div>
+      )}
+      <p className="m-0! text-xs leading-relaxed text-muted">
+        {assessment.coverage} {score.confidence} confidence.{" "}
+        <a className="inline-link" href="/methodology">
+          How scoring works
+        </a>
+      </p>
+    </div>
+  );
+}
+
 function RatingCalculation({
   score,
   scenarioLabel,
@@ -499,71 +626,27 @@ function RatingCalculation({
                   {correctedRating.reason}
                 </p>
               )}
-              <p>
-                <strong>
-                  {scenarioLabel} ·{" "}
-                  {score.practiceAssessment || score.inventoryAssessment
-                    ? score.verdict
-                    : verdict}
-                </strong>
-              </p>
-              {!score.practiceAssessment && !score.inventoryAssessment && (
-                <p>{advice}</p>
-              )}
-              <p className="text-sm text-muted">
-                {score.confidence} confidence
-              </p>
-              {score.inventoryAssessment ? (
+              {!score.inventoryAssessment && (
                 <>
-                  <p>{score.inventoryAssessment.coverage}</p>
                   <p>
-                    Each item below costs points. The largest cost counts in
-                    full; the rest add a smaller amount that grows slowly with
-                    how much there is. Anything that starts before you choose
-                    costs 50% more.
+                    <strong>
+                      {scenarioLabel} ·{" "}
+                      {score.practiceAssessment ? score.verdict : verdict}
+                    </strong>
                   </p>
-                  {score.inventoryAssessment.costs.length ? (
-                    <ul className="m-0! list-none divide-y divide-separator p-0!">
-                      {score.inventoryAssessment.costs.map((item) => (
-                        <li
-                          key={item.itemId}
-                          className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 py-2"
-                        >
-                          <div>
-                            <p>
-                              {item.label}
-                              {item.vendor ? " · " + item.vendor : ""}
-                            </p>
-                            <span className="text-sm text-muted">
-                              {item.reason}
-                              {item.consentPenalty
-                                ? " Present before you agreed."
-                                : ""}
-                            </span>
-                          </div>
-                          <strong className="whitespace-nowrap tabular-nums">
-                            −{item.cost}
-                          </strong>
-                          <div className="flex flex-wrap gap-x-3 text-xs">
-                            {[...new Set(item.evidenceIds)]
-                              .filter((id) => evidenceById.has(id))
-                              .map((id, index) => (
-                                <a
-                                  className="inline-link"
-                                  key={id}
-                                  href={"#evidence-" + id}
-                                >
-                                  {"Evidence " + (index + 1)}
-                                </a>
-                              ))}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p>No tracking or outside sharing cost any points.</p>
-                  )}
+                  {!score.practiceAssessment && <p>{advice}</p>}
+                  <p className="text-sm text-muted">
+                    {score.confidence} confidence
+                  </p>
                 </>
+              )}
+              {score.inventoryAssessment ? (
+                <InventoryBreakdown
+                  score={score}
+                  assessment={score.inventoryAssessment}
+                  evidenceById={evidenceById}
+                  headline={headline}
+                />
               ) : score.practiceAssessment ? (
                 <>
                   {score.score !== null && (
@@ -697,11 +780,13 @@ function RatingCalculation({
                     {score.baseScore + netAdjustment} points.
                   </p>
                 )}
-              <p>
-                <a className="inline-link" href="/methodology">
-                  See the scoring scale
-                </a>
-              </p>
+              {!score.inventoryAssessment && (
+                <p>
+                  <a className="inline-link" href="/methodology">
+                    See the scoring scale
+                  </a>
+                </p>
+              )}
             </Accordion.Body>
           </Accordion.Panel>
         </Accordion.Item>
@@ -744,6 +829,9 @@ function SourceLinks({ item }: { item: Pick<Adjustment, "evidenceIds"> }) {
 type DestinationVisit = {
   evidenceId: string;
   label: string;
+  scenario?: "default" | "rejected" | "accepted";
+  /** Path of a sampled page; absent for the homepage. */
+  page?: string;
   afterChoice: boolean;
   responded: boolean;
 };
@@ -843,22 +931,107 @@ const providerDescriptions = new Map([
   ],
 ]);
 
+function uniquePageNames(paths: string[]) {
+  const seen = new Map<string, number>();
+  return new Map(
+    paths.map((path) => {
+      const name = pageName(path);
+      const count = (seen.get(name) ?? 0) + 1;
+      seen.set(name, count);
+      return [path, count > 1 ? `${name} ${count}` : name];
+    }),
+  );
+}
+
+const visitColumns = [
+  ["default", "Before you choose"],
+  ["rejected", "After rejecting"],
+  ["accepted", "After accepting"],
+] as const;
+
 function DestinationVisits({ visits }: { visits: DestinationVisit[] }) {
+  const structured = visits.filter((visit) => visit.scenario);
+  if (!structured.length)
+    return (
+      <SourceLinks item={{ evidenceIds: visits.map((v) => v.evidenceId) }} />
+    );
+  const columns = visitColumns.filter(([scenario]) =>
+    structured.some((visit) => visit.scenario === scenario),
+  );
+  const paths = [
+    ...new Set(structured.flatMap(({ page }) => (page ? [page] : []))),
+  ];
+  const names = uniquePageNames(paths);
+  const rows: [string | undefined, string][] = [
+    ...(structured.some(({ page }) => !page)
+      ? [[undefined, "Homepage"] as [undefined, string]]
+      : []),
+    ...paths.map((path) => [path, names.get(path)!] as [string, string]),
+  ];
   return (
-    <ul
-      className="wrap-anywhere"
-      aria-label="Visits where this destination appeared"
-    >
-      {visits.map(({ evidenceId, label, afterChoice, responded }) => (
-        <li key={evidenceId}>
-          <a className="inline-link" href={"#evidence-" + evidenceId}>
-            {label}
-          </a>
-          {responded ? " · HTTP response observed" : " · Request attempted"}
-          {afterChoice && " · Request observed after the choice"}
-        </li>
-      ))}
-    </ul>
+    <div className="overflow-x-auto">
+      <table
+        className="w-full border-separate border-spacing-0 text-sm"
+        aria-label="Visits where this destination appeared"
+      >
+        <thead>
+          <tr className="text-xs text-muted">
+            <th className="py-1.5 pe-3 text-left font-normal">Page</th>
+            {columns.map(([scenario, label]) => (
+              <th
+                key={scenario}
+                className="px-2 py-1.5 text-center font-normal"
+              >
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([path, name]) => (
+            <tr
+              key={path ?? "home"}
+              className="[&>*]:border-t [&>*]:border-separator"
+            >
+              <th
+                scope="row"
+                className="py-2 pe-3 text-left font-medium"
+                title={path}
+              >
+                {name}
+              </th>
+              {columns.map(([scenario]) => {
+                const visit = structured.find(
+                  (v) => v.scenario === scenario && v.page === path,
+                );
+                return (
+                  <td key={scenario} className="px-2 py-2 text-center">
+                    {visit ? (
+                      <a
+                        href={"#evidence-" + visit.evidenceId}
+                        aria-haspopup="dialog"
+                        className="inline-flex min-h-7 items-center gap-1 rounded-full px-2 text-xs font-medium text-accent no-underline hover:bg-accent/10"
+                        title={
+                          visit.responded
+                            ? "The browser connected"
+                            : "The browser tried to connect"
+                        }
+                      >
+                        {visit.responded ? "Connected" : "Tried"}
+                      </a>
+                    ) : (
+                      <span className="text-muted" aria-label="Not seen">
+                        –
+                      </span>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -1745,7 +1918,7 @@ export function ReportContent({
     rejected: "Reject visit",
     accepted: "Accept visit",
   };
-  function recordVisit(source: ReportEvidence, label: string) {
+  function recordVisit(source: ReportEvidence, label: string, page?: string) {
     const observation = source.observation;
     if (
       observation?.type !== "browser_consent_counts" &&
@@ -1757,6 +1930,8 @@ export function ReportContent({
       citations.push({
         evidenceId: source.id,
         label,
+        scenario: source.consentScenario,
+        page,
         afterChoice:
           observation.afterChoice?.externalDomains.includes(domain) ?? false,
         responded: observation.responseDomains?.includes(domain) ?? false,
@@ -1785,6 +1960,7 @@ export function ReportContent({
     recordVisit(
       source,
       visitLabels[source.consentScenario!] + " · " + landed.pathname,
+      landed.pathname,
     );
   }
   const services = recipientServices(report?.storageInventory);
@@ -1904,6 +2080,9 @@ export function ReportContent({
     report?.policyBrief ?? report?.policySummaryAddendum?.items;
   const measuredDefaultVisit = browserVisits.find(
     ({ scenario }) => scenario === "default",
+  );
+  const homepageAcceptedVisit = browserVisits.find(
+    ({ scenario }) => scenario === "accepted",
   );
   const measuredChoices = consentChoices.filter(
     ([scenario]) =>
@@ -2453,37 +2632,6 @@ export function ReportContent({
               {score.verdict}
             </p>
           )}
-          {report && (
-            <div className="report-scan-meta col-span-full flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted [&_.button]:min-h-6 [&_.button]:text-xs">
-              {policyOnly && !policyReviewedAt ? (
-                <span>Policy reviewed</span>
-              ) : (
-                <time
-                  dateTime={policyOnly ? policyReviewedAt : report.completedAt}
-                >
-                  {policyOnly
-                    ? "Policy reviewed"
-                    : archived
-                      ? "Selected scan"
-                      : "Scanned"}{" "}
-                  {new Intl.DateTimeFormat("en", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                    timeZone: "UTC",
-                  }).format(
-                    new Date(
-                      policyOnly ? policyReviewedAt! : report.completedAt,
-                    ),
-                  )}
-                </time>
-              )}
-              <div className="flex flex-wrap items-center gap-1.5">
-                {hasUsableReport && (archived || scanAvailable) && scanAction}
-                {!archived && <ReportCompare host={host} />}
-              </div>
-            </div>
-          )}
           {scanActive && (
             <p
               role="status"
@@ -2554,6 +2702,38 @@ export function ReportContent({
           </section>
         )}
       </div>
+      {report && (
+        <div className="report-scan-meta mb-5 flex items-center justify-between gap-x-2 border-y border-separator py-1.5 text-sm text-muted max-sm:[&_.button]:px-2">
+          {policyOnly && !policyReviewedAt ? (
+            <span>Policy reviewed</span>
+          ) : (
+            <time
+              className="min-w-0 truncate"
+              dateTime={policyOnly ? policyReviewedAt : report.completedAt}
+            >
+              <span className="max-sm:sr-only">
+                {policyOnly
+                  ? "Policy reviewed"
+                  : archived
+                    ? "Selected scan"
+                    : "Scanned"}{" "}
+              </span>
+              {new Intl.DateTimeFormat("en", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                timeZone: "UTC",
+              }).format(
+                new Date(policyOnly ? policyReviewedAt! : report.completedAt),
+              )}
+            </time>
+          )}
+          <div className="flex shrink-0 items-center gap-0.5">
+            {hasUsableReport && (archived || scanAvailable) && scanAction}
+            {!archived && <ReportCompare host={host} />}
+          </div>
+        </div>
+      )}
       {scanActive && currentState && (
         <ScanProgress state={currentState} stages={activeStages} />
       )}
@@ -2600,6 +2780,7 @@ export function ReportContent({
               <ReportContentPages
                 sample={contentPages}
                 homepage={measuredDefaultVisit}
+                homepageAccepted={homepageAcceptedVisit}
               />
               {sourceSection}
             </>
@@ -2637,6 +2818,7 @@ export function ReportContent({
             <ReportContentPages
               sample={contentPages}
               homepage={measuredDefaultVisit}
+              homepageAccepted={homepageAcceptedVisit}
             />
           )}
           {sourceSection}
@@ -2743,6 +2925,7 @@ export function ReportContent({
                 <ReportContentPages
                   sample={contentPages}
                   homepage={measuredDefaultVisit}
+                  homepageAccepted={homepageAcceptedVisit}
                 />
               )}
               {policyTopics.length > 0 && (

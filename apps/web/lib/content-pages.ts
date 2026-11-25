@@ -202,3 +202,17 @@ export function publicContentPageSample(report?: ScanReport) {
 export type PublicContentPageSample = NonNullable<
   ReturnType<typeof publicContentPageSample>
 >;
+
+/** "/sport/fussball/fc-bayern-…" → "Sport". Full path stays in the title. */
+export function pageName(path: string) {
+  const segment = path.split("/").find(Boolean) ?? "";
+  let text = segment;
+  try {
+    text = decodeURIComponent(segment);
+  } catch {
+    /* Keep the raw segment. */
+  }
+  text = text.replace(/[-_]+/g, " ").replace(/\.[a-z0-9]+$/i, "");
+  if (!text || text.length > 24 || /\d{4,}/.test(text)) return "Article";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}

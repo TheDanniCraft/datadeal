@@ -1,168 +1,138 @@
-import { Accordion } from "@heroui/react";
 import { biggestContentPageDifference } from "../../../lib/content-page-difference";
 import {
   domainCount,
-  pageScenarioLabels,
+  pageName,
   type PublicContentPageSample,
 } from "../../../lib/content-pages";
 
-const coverageLabels = {
-  control_unavailable: "No matching consent control found",
-  inconclusive: "Could not confirm this visit",
-  untested: "Not tested",
-  measured: "Measurement unavailable",
-};
+const columns = [
+  ["default", "Before you choose"],
+  ["rejected", "After rejecting"],
+  ["accepted", "After accepting"],
+] as const;
+type Scenario = (typeof columns)[number][0];
+type Visit = { id: string; outside: number };
+
+function Count({ visit, label }: { visit?: Visit; label: string }) {
+  if (!visit) return <span className="text-muted">–</span>;
+  return (
+    <a
+      href={"#evidence-" + visit.id}
+      aria-haspopup="dialog"
+      aria-label={label + ", " + domainCount(visit.outside)}
+      className="inline-flex min-h-7 items-center rounded-full px-2 font-medium tabular-nums text-foreground no-underline hover:bg-accent/10"
+    >
+      {visit.outside === 20 ? "20+" : visit.outside}
+    </a>
+  );
+}
 
 export function ReportContentPages({
   sample,
   homepage,
+  homepageAccepted,
 }: {
   sample: PublicContentPageSample;
-  homepage?: { id: string; outside: number };
+  homepage?: Visit;
+  homepageAccepted?: Visit;
 }) {
-  const greatest = biggestContentPageDifference(sample, homepage);
   if (!sample.pages.length) return null;
-  const measured = sample.pages.filter((page) =>
-    page.visits.some((visit) => visit.measurement),
+  const greatest = biggestContentPageDifference(sample, homepage);
+  const names = new Map<string, string>();
+  const used = new Map<string, number>();
+  for (const { path } of sample.pages) {
+    const name = pageName(path);
+    const n = (used.get(name) ?? 0) + 1;
+    used.set(name, n);
+    names.set(path, n > 1 ? `${name} ${n}` : name);
+  }
+  const rows: {
+    key: string;
+    name: string;
+    path?: string;
+    visits: Partial<Record<Scenario, Visit>>;
+  }[] = [
+    {
+      key: "home",
+      name: "Homepage",
+      visits: { default: homepage, accepted: homepageAccepted },
+    },
+    ...sample.pages.map((page) => ({
+      key: page.path,
+      name: names.get(page.path)!,
+      path: page.path,
+      visits: Object.fromEntries(
+        page.visits.flatMap(({ scenario, measurement }) =>
+          measurement
+            ? [[scenario, { id: measurement.id, outside: measurement.outside }]]
+            : [],
+        ),
+      ) as Partial<Record<Scenario, Visit>>,
+    })),
+  ];
+  const shown = columns.filter(([scenario]) =>
+    rows.some((row) => row.visits[scenario]),
   );
-  const gaps = sample.pages.flatMap((page) =>
-    page.visits
-      .filter((visit) => !visit.measurement)
-      .map((visit) => ({ path: page.path, ...visit })),
-  );
+  const greatestName = greatest
+    ? sample.pages.find((page) =>
+        page.visits.some((v) => v.measurement?.id === greatest.id),
+      )
+    : undefined;
 
   return (
-    <section
-      aria-labelledby="content-pages-title"
-      className="min-w-0 py-4 [&_a]:text-foreground! [&_a]:decoration-accent [&_a]:underline-offset-4"
-    >
+    <section aria-labelledby="content-pages-title" className="min-w-0 py-4">
       <h2 id="content-pages-title" className="text-xl! font-semibold!">
-        {measured.length ? "How visits differ across pages" : "Page coverage"}
+        Other pages we visited
       </h2>
-      {homepage && greatest && (
-        <p className="mt-2 text-sm leading-relaxed">
-          Before any consent choice, the browser attempted requests to{" "}
-          <a
-            className="inline-link wrap-anywhere"
-            href={"#evidence-" + greatest.id}
-          >
-            {domainCount(greatest.outside)} on {greatest.finalPath}
-          </a>{" "}
-          and{" "}
-          <a className="inline-link" href={"#evidence-" + homepage.id}>
-            {domainCount(homepage.outside)} on the homepage
-          </a>
-          .
-        </p>
-      )}
-      <p className="my-2 text-sm text-muted">
-        Recorded visits on {measured.length} of {sample.pages.length} selected
-        pages.
+      <p className="mt-1 mb-3 text-sm text-muted">
+        {greatest && homepage && greatestName
+          ? `The ${names.get(greatestName.path)} page reached ${domainCount(greatest.outside)} before you choose, the homepage ${homepage.outside}.`
+          : "Outside domains the browser reached on each page."}
       </p>
-      <Accordion>
-        {measured.map((page) => (
-          <Accordion.Item key={page.path} id={page.path}>
-            <Accordion.Heading>
-              <Accordion.Trigger className="gap-3">
-                <span className="min-w-0 grow text-start wrap-anywhere">
-                  {page.path}
-                </span>
-                <Accordion.Indicator />
-              </Accordion.Trigger>
-            </Accordion.Heading>
-            <Accordion.Panel>
-              <Accordion.Body>
-                <p className="mb-2 text-xs text-muted">
-                  Found{" "}
-                  {page.source === "sitemap"
-                    ? "in the sitemap"
-                    : "on the homepage"}
-                  .
-                </p>
-                <dl className="grid gap-2 text-sm text-foreground">
-                  {page.visits.map(
-                    ({ scenario, measurement }) =>
-                      measurement && (
-                        <div
-                          key={scenario}
-                          className="grid gap-0.5 sm:grid-cols-[8rem_minmax(0,1fr)]"
-                        >
-                          <dt className="font-medium">
-                            {pageScenarioLabels[scenario]}
-                          </dt>
-                          <dd className="min-w-0 wrap-anywhere">
-                            <a
-                              className="inline-link"
-                              aria-label={`${pageScenarioLabels[scenario]} evidence for ${page.path}, ${domainCount(measurement.outside)}`}
-                              href={"#evidence-" + measurement.id}
-                            >
-                              {domainCount(measurement.outside)}
-                            </a>{" "}
-                            across {measurement.requests} attempted requests.
-                            {measurement.afterChoiceOutside !== undefined && (
-                              <>
-                                {" "}
-                                After the choice, the browser tried to reach{" "}
-                                {domainCount(measurement.afterChoiceOutside)}.
-                              </>
-                            )}
-                            {measurement.examples.length > 0 && (
-                              <span className="block text-xs text-muted">
-                                {measurement.examples.join(" · ")}
-                                {measurement.outside >
-                                  measurement.examples.length && " · …"}
-                              </span>
-                            )}
-                            {measurement.finalPath !== page.path && (
-                              <span className="block text-xs text-muted">
-                                Visit ended at {measurement.finalPath}.
-                              </span>
-                            )}
-                          </dd>
-                        </div>
-                      ),
-                  )}
-                </dl>
-              </Accordion.Body>
-            </Accordion.Panel>
-          </Accordion.Item>
-        ))}
-        {gaps.length > 0 && (
-          <Accordion.Item id="coverage">
-            <Accordion.Heading>
-              <Accordion.Trigger>
-                Page sampling details
-                <Accordion.Indicator />
-              </Accordion.Trigger>
-            </Accordion.Heading>
-            <Accordion.Panel>
-              <Accordion.Body>
-                <dl className="space-y-2 text-sm text-muted">
-                  {sample.pages.map((page) => {
-                    const missing = gaps.filter(
-                      (gap) => gap.path === page.path,
-                    );
-                    if (!missing.length) return null;
-                    return (
-                      <div key={page.path}>
-                        <dt className="font-medium wrap-anywhere">
-                          {page.path}
-                        </dt>
-                        {missing.map((visit) => (
-                          <dd key={visit.scenario}>
-                            {pageScenarioLabels[visit.scenario]} ·{" "}
-                            {coverageLabels[visit.outcome]}
-                          </dd>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </dl>
-              </Accordion.Body>
-            </Accordion.Panel>
-          </Accordion.Item>
-        )}
-      </Accordion>
+      <div className="overflow-x-auto rounded-2xl border border-separator">
+        <table className="w-full border-separate border-spacing-0 text-sm">
+          <caption className="sr-only">
+            Outside domains reached on each visited page
+          </caption>
+          <thead>
+            <tr className="text-xs text-muted">
+              <th className="px-4 py-2 text-left font-normal">Page</th>
+              {shown.map(([scenario, label]) => (
+                <th
+                  key={scenario}
+                  className="px-2 py-2 text-center font-normal"
+                >
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.key}
+                className="[&>*]:border-t [&>*]:border-separator"
+              >
+                <th
+                  scope="row"
+                  className="px-4 py-2 text-left font-medium"
+                  title={row.path}
+                >
+                  {row.name}
+                </th>
+                {shown.map(([scenario, label]) => (
+                  <td key={scenario} className="px-2 py-2 text-center">
+                    <Count
+                      visit={row.visits[scenario]}
+                      label={`${row.name}, ${label}`}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

@@ -100,8 +100,8 @@ export function ReportCompare({ host }: { host: string }) {
     <Modal isOpen={open} onOpenChange={changeOpen}>
       <Button
         size="sm"
-        variant="secondary"
-        className="gap-1 px-2.5 text-xs [&_svg]:size-3.5"
+        variant="ghost"
+        className="gap-1.5 [&_svg]:size-4"
         aria-label={"Compare " + host + " with another website"}
       >
         <ReportIcon name="compare" /> Compare

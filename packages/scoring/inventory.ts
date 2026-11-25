@@ -322,6 +322,19 @@ export function inventoryRating(
         })),
       classifiedItems: classified,
       unknownItems: unknown,
+      breakdown: {
+        worst: Math.round((costs[0]?.cost ?? 0) * 10) / 10,
+        others:
+          Math.round(
+            (combineCosts(costs.map(({ cost }) => cost)) -
+              (costs[0]?.cost ?? 0)) *
+              10,
+          ) / 10,
+        otherItems: costs.filter(({ cost }) => cost > 0).length
+          ? costs.filter(({ cost }) => cost > 0).length - 1
+          : 0,
+        raw: Math.round(raw * 10) / 10,
+      },
     },
   };
 }
