@@ -96,6 +96,12 @@ function recipientCost(item: RecipientItem, c?: InventoryClassification) {
     : 0;
 }
 
+const proxyLabels = {
+  plausible: "Plausible",
+  permutive: "Permutive",
+  meta: "Meta",
+} as const;
+
 const storageLabel = (item: StorageItem) =>
   `${item.mechanism === "cookie" ? "Cookie" : item.mechanism === "local_storage" ? "Local storage" : "Session storage"} ${item.name}${item.site ? " (" + item.site + ")" : ""}`;
 
@@ -146,7 +152,9 @@ export function inventoryCostsFor(
   for (const item of inventory.recipients)
     add(
       item,
-      "Data sent to " + item.domain,
+      item.via
+        ? `${proxyLabels[item.via.vendor]} event forwarded via ${item.domain}`
+        : "Data sent to " + item.domain,
       recipientCost(item, byId.get(item.id)),
     );
   return costs.sort((a, b) => b.cost - a.cost);

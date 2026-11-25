@@ -24,6 +24,7 @@ import {
   consentSettleMs,
   measureContentPages,
   observeConsentWithCoverage,
+  realVisitorLaunchArgs,
   untestedConsentCoverage,
 } from "./consent-observation";
 
@@ -55,6 +56,7 @@ export async function runWorker(
             chromiumSandbox: true,
             timeout: 5000,
             proxy: { server: browserProxy, bypass: "<-loopback>" },
+            args: realVisitorLaunchArgs,
           });
         }
       : undefined;

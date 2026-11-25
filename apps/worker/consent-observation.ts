@@ -30,6 +30,25 @@ const acceptAllName =
 const shortAcceptAllName =
   /^(?:(?:accept|allow) all|(?:alle|alles) (?:akzeptieren|erlauben))$/i;
 export const consentSettleMs = 3000;
+
+/**
+ * Many trackers (Plausible, some ad tags) skip browsers that announce
+ * automation through navigator.webdriver. Measuring what a real visitor
+ * experiences means not announcing it.
+ */
+export async function asRealVisitor(context: BrowserContext) {
+  await context.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, "webdriver", {
+      configurable: true,
+      get: () => false,
+    });
+  });
+}
+
+/** Chromium flags for the same reason as asRealVisitor. */
+export const realVisitorLaunchArgs = [
+  "--disable-blink-features=AutomationControlled",
+];
 const scenarios = [
   ["default", null, null],
   [
@@ -272,6 +291,7 @@ export async function observeConsentWithCoverage(
         acceptDownloads: false,
         serviceWorkers: "block",
       });
+      await asRealVisitor(context);
       const page = await context.newPage();
       let latestDocument: Response | undefined;
       page.on("response", (response) => {

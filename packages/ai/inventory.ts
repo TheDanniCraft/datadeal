@@ -39,6 +39,8 @@ export const inventoryInstructions = [
   "Judge the actual function, not the mere presence of a cookie: a chat conversation ID or a consent record is",
   "proportionate; a persistent ID shared with an advertising network is not. A same-site cookie can still be",
   "written by a third-party script (e.g. _ga, _fbp, _gcl_au); classify it by that vendor's use.",
+  "A recipient with via.kind = first_party_proxy is the site's own domain receiving a known vendor's event",
+  "payload (e.g. Plausible); the site forwards it to that vendor. Classify it by that vendor's use.",
   "If you cannot tell what an item does, use purpose unknown and confidence low. You may request research on up",
   "to 3 recipient domains from the inventory whose own privacy or cookie documentation would explain unknown",
   "items. Do not request research for well-known vendors.",

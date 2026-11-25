@@ -204,3 +204,43 @@ test("ignores evidence from other scans and first-party recipients", () => {
   expect(inventory.storage).toEqual([]);
   expect(inventory.recipients).toEqual([]);
 });
+
+test("keeps a vendor event sent through a first-party proxy", () => {
+  const proxy: Evidence = {
+    id: "browser-fields-accepted-2",
+    kind: "observed_technical",
+    excerpt: "fields",
+    retrievedAt: "2026-11-25T10:00:00.000Z",
+    scanId: id,
+    consentScenario: "accepted",
+    observation: {
+      type: "browser_request_fields",
+      targetDomain: "shop.example",
+      scheme: "https",
+      relation: "same_origin",
+      method: "POST",
+      phase: "before_choice",
+      fieldCategories: ["page_url", "event_name", "site_domain"],
+      sources: ["json"],
+      signature: "plausible_event",
+      attempts: 1,
+      responses: 1,
+    },
+  } as Evidence;
+  const plain = {
+    ...proxy,
+    id: "x",
+    observation: { ...proxy.observation!, signature: undefined },
+  } as Evidence;
+  const inventory = buildStorageInventory({
+    id,
+    domain: "shop.example",
+    evidence: [proxy, plain],
+  });
+  expect(inventory.recipients).toHaveLength(1);
+  expect(inventory.recipients[0]).toMatchObject({
+    domain: "shop.example",
+    via: { kind: "first_party_proxy", vendor: "plausible" },
+    phases: ["before_choice"],
+  });
+});

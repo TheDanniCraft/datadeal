@@ -57,6 +57,14 @@ export const recipientItem = z.strictObject({
   fields: z.array(recipientFields).max(5),
   // A value from browser storage reappeared in a request to this recipient.
   linkedIdentifier: z.boolean(),
+  // A same-site endpoint whose payload matched a known vendor event, i.e.
+  // the site forwards it to that vendor server-side (e.g. Plausible proxy).
+  via: z
+    .strictObject({
+      kind: z.literal("first_party_proxy"),
+      vendor: z.enum(["plausible", "permutive", "meta"]),
+    })
+    .optional(),
   answered: z.boolean(),
   evidenceIds: ids,
 });
@@ -132,6 +140,11 @@ const shapeRank = (value: StorageValueSignal) =>
   (value.identifierLike ? 4 : 0) +
   ["empty", "short", "medium", "long"].indexOf(value.length);
 const phaseOrder = inventoryPhase.options;
+const proxyVendors = {
+  plausible_event: "plausible",
+  permutive_event: "permutive",
+  meta_pixel_event: "meta",
+} as const;
 
 type Visit = Extract<
   NonNullable<Evidence["observation"]>,
@@ -235,16 +248,25 @@ export function buildStorageInventory(
       fields: RecipientItem["fields"];
       linked: boolean;
       answered: boolean;
+      signature?: "plausible_event" | "permutive_event" | "meta_pixel_event";
     },
   ) {
     const owner = getDomain(domain, { allowPrivateDomains: true }) ?? domain;
-    if (homeSite && owner === homeSite) return;
-    const existing = recipients.get(owner);
+    const proxied =
+      homeSite && owner === homeSite && detail?.signature
+        ? proxyVendors[detail.signature]
+        : undefined;
+    if (homeSite && owner === homeSite && !proxied) return;
+    const key = proxied ? owner + "#" + proxied : owner;
+    const existing = recipients.get(key);
     const target =
       existing ??
       ({
-        id: "rc-" + shortHash(owner),
+        id: "rc-" + shortHash(key),
         domain: owner,
+        ...(proxied && {
+          via: { kind: "first_party_proxy" as const, vendor: proxied },
+        }),
         phases: [phase],
         fields: [],
         linkedIdentifier: false,
@@ -252,7 +274,7 @@ export function buildStorageInventory(
         evidenceIds: [evidenceId],
       } satisfies RecipientItem);
     if (existing) merge(existing, phase, evidenceId);
-    else recipients.set(owner, target);
+    else recipients.set(key, target);
     if (detail) {
       target.fields = recipientFields.options.filter(
         (f) => target.fields.includes(f) || detail.fields.includes(f),
@@ -304,6 +326,7 @@ export function buildStorageInventory(
                 request.matchedStorage ?? request.matchedEndStorage,
               ),
               answered: request.responses > 0,
+              signature: request.signature,
             },
           );
     } else if (observation.type === "browser_request_fields") {
@@ -325,6 +348,7 @@ export function buildStorageInventory(
             observation.matchedStorage ?? observation.matchedEndStorage,
           ),
           answered: observation.responses > 0,
+          signature: observation.signature,
         },
       );
     }
