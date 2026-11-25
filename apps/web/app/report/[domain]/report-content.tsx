@@ -911,13 +911,13 @@ export function Flow({
   const visible = connections;
   const rings: number[] = [];
   for (let left = visible.length, k = 0; left > 0; k++) {
-    const take = Math.min(left, 6 + 6 * k);
+    const take = Math.min(left, 6 + 4 * k);
     rings.push(take);
     left -= take;
   }
-  const outer = rings.length ? 20 + 14 * (rings.length - 1) : 0;
+  const outer = rings.length ? 26 + 20 * (rings.length - 1) : 0;
   const points = rings.flatMap((take, k) => {
-    const radius = rings.length === 1 ? 32 : 20 + 14 * k;
+    const radius = rings.length === 1 ? 32 : 26 + 20 * k;
     return Array.from({ length: take }, (_, index) => {
       const angle =
         (take <= 2 ? -Math.PI / 4 : -Math.PI / 2) +
@@ -931,10 +931,8 @@ export function Flow({
     });
   });
   // Start zoomed out just enough for the outer ring to fit.
-  const fitZoom = Math.min(1, 44 / Math.max(outer, 1));
+  const fitZoom = Math.max(0.75, Math.min(1, 44 / Math.max(outer, 1)));
   const scale = zoom ?? fitZoom;
-  const dense = visible.length > 12;
-  const showLabels = !dense || scale >= 1.3;
   function moveGraph(target: HTMLElement, x: number, y: number) {
     const bound = (value: number, limit: number) =>
       Math.max(-limit, Math.min(limit, value));
@@ -947,7 +945,7 @@ export function Flow({
     setZoom(Math.min(2.5, Math.max(0.35, scale * factor)));
   const network = (
     <div
-      className="flow-network relative h-[clamp(21rem,48vw,32rem)] cursor-grab touch-pan-y overflow-hidden select-none focus-visible:outline-2 focus-visible:-outline-offset-2 active:cursor-grabbing data-touch-pan:touch-none"
+      className="flow-network relative h-[clamp(26rem,60vw,40rem)] cursor-grab touch-pan-y overflow-hidden select-none focus-visible:outline-2 focus-visible:-outline-offset-2 active:cursor-grabbing data-touch-pan:touch-none"
       role="group"
       aria-label="Website connection network"
       aria-describedby={helpId}
@@ -1094,12 +1092,7 @@ export function Flow({
               aria-label={item.label}
               aria-describedby={helpId + "-" + flowEvidence(item)}
               variant={selected === index ? "primary" : "secondary"}
-              className={
-                "flow-destination absolute! max-w-[min(34%,10rem)] -translate-1/2 text-center leading-tight whitespace-normal wrap-anywhere rounded-full! p-0! " +
-                (dense
-                  ? "size-[clamp(2.2rem,5vw,3rem)]"
-                  : "size-[clamp(2.8rem,8vw,4.5rem)]")
-              }
+              className="flow-destination absolute! max-w-[min(34%,10rem)] -translate-1/2 text-center leading-tight whitespace-normal wrap-anywhere rounded-full! p-0! size-[clamp(2.8rem,6vw,3.75rem)]"
               style={{
                 left: points[index].x + "%",
                 top: points[index].y + "%",
@@ -1134,10 +1127,7 @@ export function Flow({
                 </svg>
               )}
               <span
-                className={
-                  "flow-label pointer-events-none absolute top-full left-1/2 mt-1.5 w-max max-w-[min(31vw,13rem)] -translate-x-1/2 truncate text-xs leading-tight text-foreground " +
-                  (showLabels || selected === index ? "" : "sr-only")
-                }
+                className="flow-label pointer-events-none absolute top-full left-1/2 mt-1.5 w-max max-w-[min(31vw,13rem)] -translate-x-1/2 truncate text-xs leading-tight text-foreground"
                 aria-hidden="true"
               >
                 {item.label}
