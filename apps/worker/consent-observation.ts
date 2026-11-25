@@ -114,9 +114,33 @@ async function findConsentControl(page: Page, name: RegExp, shortName: RegExp) {
             .or(frame.getByRole("dialog", { name: cookieText }))
             .or(frame.getByRole("alertdialog", { name: cookieText }))
             .getByRole("button", { name: shortName });
+          // Some banners (e.g. recent c15t) are a plain <aside>/<div> with no
+          // dialog role. Accept a short label there only inside a compact
+          // container that mentions privacy and offers both an accept-type
+          // and a reject- or preferences-type control, so an unrelated
+          // "Accept all" (invitations, terms) does not qualify.
+          const plainPanel = frame
+            .locator("aside, section, footer, form, div")
+            .filter({
+              hasText:
+                /\b(?:cookies?|tracking|privacy|datenschutz|einwilligung|consent)\b/i,
+            })
+            .filter({
+              has: frame.getByRole("button", {
+                name: /^(?:accept|allow|alle|alles)\b/i,
+              }),
+            })
+            .filter({
+              has: frame.getByRole("button", {
+                name: /^(?:reject|decline|preferences|settings|customi[sz]e|manage|ablehnen|einstellungen|anpassen|nur notwendige)\b/i,
+              }),
+            })
+            .filter({ hasNot: frame.locator("main, article, nav, header") })
+            .getByRole("button", { name: shortName });
           const control = frame
             .getByRole("button", { name })
             .or(shortControl)
+            .or(plainPanel)
             .filter({ visible: true });
           const count = await control.count();
           return count ? { count, control, frame } : undefined;
