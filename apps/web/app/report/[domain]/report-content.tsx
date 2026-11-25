@@ -41,14 +41,7 @@ import {
 import { bundledSiteFavicon } from "../../../lib/site-favicon";
 import { ratingGuidance } from "../../../lib/rating-guidance";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import {
-  Accordion,
-  Avatar,
-  Button,
-  Card,
-  Chip,
-  Spinner,
-} from "@heroui/react";
+import { Accordion, Avatar, Button, Card, Chip, Spinner } from "@heroui/react";
 import { Timeline } from "@heroui-pro/react/timeline";
 import { LineChart } from "@heroui-pro/react/line-chart";
 import { EmptyState } from "@heroui-pro/react/empty-state";
@@ -2623,33 +2616,67 @@ export function ReportContent({
               )}
               {policyTopics.length > 0 && (
                 <Section title="Topics in the privacy policy">
-                  <p>These excerpts describe what the policy says.</p>
-                  <ul>
+                  <p className="text-sm text-muted">
+                    Where the privacy policy talks about each topic. Open a
+                    section to read the quoted passages.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
                     {Object.entries(policyTopicLabels).map(([topic, label]) => {
-                      const sources = policyTopics.filter(
-                        (source) => source.topic === topic,
-                      );
+                      // One row per policy section; a long section can supply
+                      // several excerpts for the same topic.
+                      const sections = new Map<
+                        string,
+                        { id: string; count: number }
+                      >();
+                      for (const source of policyTopics)
+                        if (source.topic === topic) {
+                          const entry = sections.get(source.heading);
+                          if (entry) entry.count++;
+                          else
+                            sections.set(source.heading, {
+                              id: source.id,
+                              count: 1,
+                            });
+                        }
+                      if (!sections.size) return null;
                       return (
-                        sources.length > 0 && (
-                          <li key={topic}>
-                            <strong>{label}</strong>
-                            <ul>
-                              {sources.map((source) => (
-                                <li key={source.id}>
-                                  <a
-                                    className="inline-link"
-                                    href={"#evidence-" + source.id}
+                        <section
+                          key={topic}
+                          className="rounded-2xl border border-separator p-2"
+                          aria-label={label}
+                        >
+                          <h3 className="m-0! px-2 pt-1.5 pb-1 text-xs font-semibold tracking-wide text-muted uppercase">
+                            {label}
+                          </h3>
+                          <ul className="m-0! list-none p-0!">
+                            {[...sections].map(([heading, { id, count }]) => (
+                              <li key={heading}>
+                                <a
+                                  className="group flex min-h-11 items-center gap-3 rounded-lg px-2 py-2 text-sm text-foreground no-underline hover:bg-default/60 focus-visible:outline-2 focus-visible:outline-focus"
+                                  href={"#evidence-" + id}
+                                >
+                                  <span className="min-w-0 flex-1 group-hover:underline">
+                                    {heading}
+                                  </span>
+                                  {count > 1 && (
+                                    <span className="shrink-0 rounded-full bg-default px-2 py-0.5 text-xs text-muted">
+                                      {count} passages
+                                    </span>
+                                  )}
+                                  <span
+                                    aria-hidden="true"
+                                    className="shrink-0 text-muted"
                                   >
-                                    {source.heading}
-                                  </a>
-                                </li>
-                              ))}
-                            </ul>
-                          </li>
-                        )
+                                    ›
+                                  </span>
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
                       );
                     })}
-                  </ul>
+                  </div>
                 </Section>
               )}
               {hasChoiceVisit && (
