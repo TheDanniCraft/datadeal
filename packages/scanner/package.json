@@ -1,0 +1,15 @@
+{
+  "type": "module",
+  "name": "@datadeal/scanner",
+  "dependencies": {
+    "cheerio": "^1",
+    "ipaddr.js": "^2",
+    "tldts": "7.5.5",
+    "@datadeal/contracts": "workspace:*"
+  },
+  "exports": "./index.ts",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc"
+  }
+}

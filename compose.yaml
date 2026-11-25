@@ -1,0 +1,174 @@
+name: datadeal
+
+x-app-db: &app-db
+  DATABASE_URL: postgres://datadeal_app@database:5432/datadeal
+  PGPASSWORD: ${DATADEAL_DB_PASSWORD:?Set the application database password}
+
+services:
+  database:
+    image: postgres:17-bookworm@sha256:1eff563f6c868b9b433566e9f3cf6e5c79fbd3b95bf70ec7277d376cdbfc50d7
+    environment:
+      POSTGRES_DB: datadeal
+      POSTGRES_PASSWORD: ${DATADEAL_DB_ADMIN_PASSWORD:?Set the migration database password}
+      DATADEAL_DB_PASSWORD: ${DATADEAL_DB_PASSWORD:?Set the application database password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/init-db.sql:/docker-entrypoint-initdb.d/10-datadeal.sql:ro
+    networks: [storage]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "pg_isready",
+          "-U",
+          "postgres",
+          "-d",
+          "datadeal",
+          "-h",
+          "127.0.0.1",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    image: datadeal-migrate:local
+    build:
+      context: .
+      dockerfile: deploy/worker.Dockerfile
+      target: migrate
+    environment:
+      DATABASE_URL: postgres://postgres@database:5432/datadeal
+      PGPASSWORD: ${DATADEAL_DB_ADMIN_PASSWORD:?Set the migration database password}
+    depends_on:
+      database:
+        condition: service_healthy
+    networks: [storage]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  web:
+    image: datadeal-web:local-check
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+      target: web
+      secrets: [heroui_auth_token]
+    ports:
+      - "127.0.0.1:${DATADEAL_WEB_PORT:-3100}:3000"
+    environment:
+      <<: *app-db
+      APP_ORIGIN: ${APP_ORIGIN:?Set the HTTPS origin for account and billing returns}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set a strong account session secret}
+      DATADEAL_SCAN_LIMIT_SECRET: ${DATADEAL_SCAN_LIMIT_SECRET:?Set a strong guest scan limit secret}
+      DATADEAL_TRUSTED_CLIENT_IP_HEADER: ${DATADEAL_TRUSTED_CLIENT_IP_HEADER:-}
+      DATADEAL_MAIL_MODE: ${DATADEAL_MAIL_MODE:-}
+      DATADEAL_MAIL_FROM: ${DATADEAL_MAIL_FROM:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      CREEM_MODE: ${CREEM_MODE:-}
+      CREEM_API_KEY: ${CREEM_API_KEY:-}
+      CREEM_WEBHOOK_SECRET: ${CREEM_WEBHOOK_SECRET:-}
+      CREEM_MONTHLY_PRODUCT: ${CREEM_MONTHLY_PRODUCT:-}
+      CREEM_YEARLY_PRODUCT: ${CREEM_YEARLY_PRODUCT:-}
+      CREEM_CREDIT_PACK_PRODUCT: ${CREEM_CREDIT_PACK_PRODUCT:-}
+      CREEM_CREDIT_PACK_CREDITS: ${CREEM_CREDIT_PACK_CREDITS:-}
+      CREEM_CREDIT_PACK_PRICE_CENTS: ${CREEM_CREDIT_PACK_PRICE_CENTS:-}
+      DATADEAL_API_REPORT_READ_CREDITS: ${DATADEAL_API_REPORT_READ_CREDITS:-}
+      DATADEAL_API_SCAN_CREDITS: ${DATADEAL_API_SCAN_CREDITS:-}
+      DATADEAL_DEVELOPER_API_PREVIEW: ${DATADEAL_DEVELOPER_API_PREVIEW:-false}
+      DATADEAL_PRO_MONTHLY_CENTS: ${DATADEAL_PRO_MONTHLY_CENTS:-399}
+      DATADEAL_PRO_YEARLY_CENTS: ${DATADEAL_PRO_YEARLY_CENTS:-3499}
+      DATADEAL_OPERATOR_NAME: ${DATADEAL_OPERATOR_NAME:-}
+      DATADEAL_PRIVACY_EMAIL: ${DATADEAL_PRIVACY_EMAIL:-}
+      DATADEAL_UMAMI_ORIGIN: ${DATADEAL_UMAMI_ORIGIN:-}
+      DATADEAL_UMAMI_WEBSITE_ID: ${DATADEAL_UMAMI_WEBSITE_ID:-}
+      DATADEAL_GOOGLE_AD_UNIT: ${DATADEAL_GOOGLE_AD_UNIT:-}
+      DATADEAL_GOOGLE_LIMITED_AD_UNIT: ${DATADEAL_GOOGLE_LIMITED_AD_UNIT:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [storage, web-outbound]
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
+  browser-egress:
+    image: datadeal-egress:local
+    build:
+      context: .
+      dockerfile: deploy/worker.Dockerfile
+      target: egress
+    networks: [browser, proxy-outbound]
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.status===204?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    restart: unless-stopped
+
+  worker:
+    image: datadeal-worker:local
+    build:
+      context: .
+      dockerfile: deploy/worker.Dockerfile
+      target: worker
+    environment:
+      <<: *app-db
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set the worker project API key}
+      DATADEAL_BROWSER_PROXY: http://browser-egress:8080
+      CONTENT_PAGE_LIMIT: ${CONTENT_PAGE_LIMIT:-3}
+      DATADEAL_COMPARE_VISIT_IDENTIFIERS: ${DATADEAL_COMPARE_VISIT_IDENTIFIERS:-false}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      browser-egress:
+        condition: service_healthy
+    networks: [storage, browser, worker-outbound]
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    shm_size: 1gb
+    cap_drop: [ALL]
+    security_opt:
+      [no-new-privileges:true, "seccomp=./deploy/chromium-seccomp.json"]
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+
+networks:
+  storage:
+    internal: true
+  browser:
+    internal: true
+  web-outbound:
+  worker-outbound:
+  proxy-outbound:
+
+secrets:
+  heroui_auth_token:
+    environment: HEROUI_AUTH_TOKEN

@@ -1,0 +1,25 @@
+{
+  "type": "module",
+  "name": "@datadeal/contracts",
+  "dependencies": {
+    "zod": "^4"
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./practice-evidence": "./practice-evidence.ts",
+    "./c15t-choice": "./c15t-choice.ts",
+    "./google-cookies": "./google-cookies.ts",
+    "./documented-cookie": "./documented-cookie.ts",
+    "./meta-cookies": "./meta-cookies.ts",
+    "./vendor-listing": "./vendor-listing.ts",
+    "./advanced-report": "./advanced-report.ts",
+    "./content-page": "./content-page.ts",
+    "./paper-plane": "./paper-plane.ts",
+    "./creem-credits": "./creem-credits.ts",
+    "./hosting-disclosure": "./hosting-disclosure.ts"
+  },
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc"
+  }
+}

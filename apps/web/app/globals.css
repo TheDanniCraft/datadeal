@@ -1,0 +1,103 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+@import "@heroui-pro/react/css";
+@import "@heroui-pro/react/themes/mouve";
+@import "../../../packages/ui/mouve.css";
+
+.inline-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+[data-theme="mouve-dark"]
+  :is(.privacy-report, #browser-privacy, .reward-screen)
+  .inline-link {
+  color: color-mix(in oklch, var(--accent) 55%, var(--foreground));
+}
+details summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+section[id],
+details[id] {
+  scroll-margin-top: 1rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+.flow-legend li::before {
+  content: "";
+  width: 1.3rem;
+  height: 2px;
+  background: repeating-linear-gradient(
+    to right,
+    var(--muted) 0 2px,
+    transparent 2px 6px
+  );
+}
+.flow-legend [data-evidence="observed"]::before {
+  background: repeating-linear-gradient(
+    to right,
+    var(--accent) 0 6px,
+    transparent 6px 10px
+  );
+}
+.flow-legend [data-evidence="both"]::before {
+  background: repeating-linear-gradient(
+    to right,
+    var(--accent) 0 6px,
+    transparent 6px 9px,
+    var(--accent) 9px 11px,
+    transparent 11px 14px
+  );
+}
+@media (prefers-reduced-motion: no-preference) {
+  .flow-lines line {
+    animation: flow-dash 5s linear infinite;
+  }
+  @keyframes flow-dash {
+    to {
+      stroke-dashoffset: -24;
+    }
+  }
+}
+@layer base {
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font:
+      16px/1.55 var(--font-ui),
+      sans-serif;
+  }
+  :focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+  h1,
+  h2,
+  h3 {
+    margin: 0;
+    line-height: 1.12;
+    font-weight: 730;
+    letter-spacing: -0.027em;
+  }
+  h1 {
+    font-size: clamp(2.5rem, 8vw, 5.4rem);
+  }
+  h2 {
+    font-size: clamp(1.4rem, 3.1vw, 2rem);
+  }
+  h3 {
+    font-size: 1.12rem;
+  }
+  p {
+    margin: 0.55rem 0;
+  }
+}

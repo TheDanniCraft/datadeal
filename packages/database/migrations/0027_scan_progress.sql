@@ -1,0 +1,3 @@
+BEGIN;
+ALTER TABLE scan_jobs ADD COLUMN stages text[] NOT NULL DEFAULT '{}';
+COMMIT;

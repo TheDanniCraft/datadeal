@@ -1,0 +1,36 @@
+{
+  "name": "datadeal",
+  "private": true,
+  "packageManager": "bun@1.4.2",
+  "scripts": {
+    "dev": "bun --no-env-file run --cwd apps/web dev",
+    "dev:creem-webhook": "node tools/local-creem-webhook.mjs",
+    "build": "bun --no-env-file run --cwd apps/web build && bun --no-env-file run --cwd apps/extension build",
+    "start": "bun --no-env-file run --cwd apps/web start",
+    "typecheck": "bun --no-env-file run --filter './apps/*' --filter './packages/*' typecheck",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "lint": "prettier --check ."
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "vitest": "5.1.1",
+    "prettier": "3.10.1",
+    "@playwright/test": "1.65.1",
+    "@types/node": "^24"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "overrides": {
+    "heroui-pro@1.0.0-beta.14": {
+      "figlet": "1.11.3"
+    }
+  },
+  "trustedDependencies": [
+    "esbuild",
+    "@heroui-pro/react",
+    "heroui-pro"
+  ]
+}

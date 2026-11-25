@@ -1,0 +1,16 @@
+{
+  "type": "module",
+  "name": "@datadeal/database",
+  "dependencies": {
+    "postgres": "^3",
+    "drizzle-orm": "0.45.4",
+    "@datadeal/contracts": "workspace:*",
+    "@datadeal/scoring": "workspace:*"
+  },
+  "exports": "./index.ts",
+  "private": true,
+  "scripts": {
+    "migrate": "node migrate.mjs",
+    "typecheck": "tsc"
+  }
+}

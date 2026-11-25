@@ -1,0 +1,8 @@
+# DataDeal extension third-party notices
+
+Both browser packages contain the following notices.
+
+- **JavaScript.** Each report identifies its bundled npm packages, versions and upstream license texts. WXT and `@wxt-dev/browser` publish their MIT license in the framework repository. Its text is included separately. [Popup](licenses/popup.md) · [Background](licenses/background.md) · [Form reminder](licenses/form-reminder.md) · [WXT MIT notice](licenses/WXT-MIT.txt) · [WXT upstream license](https://github.com/wxt-dev/wxt/blob/f04974ce8f1152b158a599321ef66999f526e5f9/LICENSE)
+- **Styles and font.** The popup bundles public HeroUI styles under Apache-2.0, Tailwind CSS and tw-animate-css under MIT, and the Inter font under SIL Open Font License 1.1. [HeroUI notice in the popup inventory](licenses/popup.md) · [Tailwind CSS](licenses/Tailwind-CSS.txt) · [tw-animate-css](licenses/tw-animate-css.txt) · [Inter](licenses/Inter-OFL.txt)
+- **Runtime helpers.** The popup includes preload and module interoperability helpers emitted by Vite and Rolldown. [Vite notices](licenses/Vite.md) · [Rolldown](licenses/Rolldown.txt) · [Rolldown third-party notices](licenses/Rolldown-third-party.txt)
+- **Domain lookup data.** tldts includes a generated lookup table derived from the Public Suffix List. The list is available under Mozilla Public License 2.0. The versioned package source contains the same generated table used for this build. [MPL 2.0](licenses/Public-Suffix-List-MPL-2.0.txt) · [tldts 7.5.5 table source](https://github.com/remusao/tldts/blob/30f32825e9b587489b21e0ac70370c59ee3f6412/packages/tldts/src/data/trie.ts) · [Public Suffix List source](https://publicsuffix.org/list/public_suffix_list.dat)

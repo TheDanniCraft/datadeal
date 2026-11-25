@@ -1,0 +1,60 @@
+export const flightCap = 1000;
+export const guaranteedPoints = 50;
+export const defaultReportPointCost = 50;
+export const defaultRefreshPointCost = 50;
+export const flightCheckpoint = 36;
+const growthPerSecond = 0.59085;
+
+export function survivalProbability(target: number) {
+  if (!Number.isInteger(target) || target < 1 || target > flightCap)
+    throw new RangeError("Choose an integer target from 1 to 1,000.");
+  return (200 / (199 + target)) ** 2;
+}
+
+// Draw once on the server. Never send the endpoint to a running flight.
+export function drawFlightEndpoint(u: number) {
+  if (!(u > 0 && u < 1)) throw new RangeError("Expected a draw in (0, 1).");
+  return 1 + 200 * (1 / Math.sqrt(u) - 1);
+}
+
+export function flightTimeMs(points: number) {
+  if (!Number.isFinite(points) || points < 1)
+    throw new RangeError("Expected a positive flight threshold.");
+  return (Math.log(points) * 1000) / growthPerSecond;
+}
+
+export function liveOffer(activeMs: number) {
+  if (!Number.isFinite(activeMs) || activeMs < 0)
+    throw new RangeError("Expected nonnegative active flight time.");
+  return Math.min(
+    flightCap,
+    Math.floor(Math.exp((growthPerSecond * activeMs) / 1000) + 1e-10),
+  );
+}
+
+// The caller uses server time, excluding any time held at the checkpoint.
+// A prechosen target settles even if the client disconnects before reaching it.
+export function resolveFlight({
+  endpoint,
+  activeMs,
+  target,
+  collect,
+}: {
+  endpoint: number;
+  activeMs: number;
+  target?: number | null;
+  collect?: boolean;
+}): { state: "flying" | "banked" | "missed"; points: number } {
+  if (!Number.isFinite(endpoint) || endpoint < 1)
+    throw new RangeError("Invalid flight endpoint.");
+  const automatic = target ?? flightCap;
+  if (!Number.isInteger(automatic) || automatic < 1 || automatic > flightCap)
+    throw new RangeError("Invalid bank target.");
+  const offer = liveOffer(activeMs);
+  if (automatic < endpoint && activeMs >= flightTimeMs(automatic))
+    return { state: "banked", points: automatic };
+  if (activeMs >= flightTimeMs(endpoint)) return { state: "missed", points: 0 };
+  return collect
+    ? { state: "banked", points: offer }
+    : { state: "flying", points: offer };
+}

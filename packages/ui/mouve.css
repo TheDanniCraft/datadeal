@@ -1,0 +1,122 @@
+/* DataDeal saved HeroUI Pro overrides. */
+.mouve-light,
+[data-theme="mouve-light"],
+.mouve-dark,
+[data-theme="mouve-dark"] {
+  /* Border Radius */
+  --eclipse: oklch(25% 0.02 300);
+  --radius: 0.5rem;
+  --field-radius: 0.75rem;
+}
+
+.mouve-light,
+[data-theme="mouve-light"] {
+  color-scheme: light;
+  --rating-excellent: oklch(0.42 0.135 145);
+  --rating-good: oklch(0.46 0.07 175);
+  --rating-mixed: oklch(0.47 0.113 68);
+  --rating-concerning: oklch(0.49 0.15 46);
+  --rating-poor: oklch(0.49 0.18 26);
+  --rating-critical: oklch(0.39 0.18 19);
+  --rating-unrated: var(--muted);
+  /* Theme Colors */
+  --background: oklch(95.5% 0.0056 277.36);
+  --muted: oklch(58% 0.014 277.36);
+  --scrollbar: oklch(82% 0.0093 277.36);
+  --surface: oklch(97.5% 0.0037 277.36);
+  --surface-secondary: oklch(95% 0.0056 277.36);
+  --surface-tertiary: oklch(93.5% 0.0075 277.36);
+  --overlay: oklch(97.5% 0.0037 277.36);
+  --default: oklch(92% 0.0056 277.36);
+  --accent: oklch(55.12% 0.1987 277.36);
+  --field-background: oklch(97% 0.0028 277.36);
+  --field-border: oklch(88% 0.0093 277.36);
+  --border: oklch(88% 0.007 277.36);
+  --separator: oklch(92% 0.0047 277.36);
+  --focus: oklch(55.12% 0.1987 277.36);
+  --backdrop: oklch(50% 0.0187 277.36 / 0.4);
+  --accent-soft: color-mix(
+    in oklab,
+    oklch(55.12% 0.1987 277.36) 15%,
+    transparent
+  );
+  --accent-hover: color-mix(
+    in oklab,
+    oklch(55.12% 0.1987 277.36) 90%,
+    var(--snow) 10%
+  );
+
+  /* Charts */
+  --chart-1: oklch(42% 0.14 277.36);
+  --chart-2: oklch(50% 0.16 277.36);
+  --chart-3: oklch(55% 0.18 277.36);
+  --chart-4: oklch(65% 0.14 277.36);
+  --chart-5: oklch(75% 0.1 277.36);
+}
+
+.mouve-dark,
+[data-theme="mouve-dark"] {
+  color-scheme: dark;
+  --rating-excellent: oklch(0.85 0.19 145);
+  --rating-good: oklch(0.76 0.085 175);
+  --rating-mixed: oklch(0.84 0.13 80);
+  --rating-concerning: oklch(0.8 0.139 55);
+  --rating-poor: oklch(0.77 0.14 28);
+  --rating-critical: oklch(0.72 0.195 22);
+  --rating-unrated: var(--muted);
+  /* Theme Colors */
+  --background: oklch(16% 0.0093 277.36);
+  --muted: oklch(65% 0.0093 277.36);
+  --scrollbar: oklch(35% 0.0093 277.36);
+  --surface: oklch(20% 0.0093 277.36);
+  --surface-secondary: oklch(24% 0.0093 277.36);
+  --surface-tertiary: oklch(27% 0.0093 277.36);
+  --overlay: oklch(20% 0.0093 277.36);
+  --default: oklch(26% 0.0093 277.36);
+  --accent: oklch(55.12% 0.1987 277.36);
+  --accent-foreground: var(--snow);
+  --success-foreground: oklch(20% 0.0093 277.36);
+  --warning-foreground: oklch(20% 0.0093 277.36);
+  --field-background: oklch(22% 0.0084 277.36);
+  --field-border: oklch(32% 0.0117 277.36);
+  --segment: oklch(28% 0.0117 277.36);
+  --border: oklch(30% 0.0093 277.36);
+  --separator: oklch(28% 0.0084 277.36);
+  --focus: oklch(55.12% 0.1987 277.36);
+  --accent-soft: color-mix(
+    in oklab,
+    oklch(55.12% 0.1987 277.36) 15%,
+    transparent
+  );
+  --accent-hover: color-mix(
+    in oklab,
+    oklch(55.12% 0.1987 277.36) 90%,
+    var(--snow) 10%
+  );
+
+  /* Charts */
+  --chart-1: oklch(50% 0.12 277.36);
+  --chart-2: oklch(60% 0.14 277.36);
+  --chart-3: oklch(70% 0.16 277.36);
+  --chart-4: oklch(78% 0.12 277.36);
+  --chart-5: oklch(85% 0.08 277.36);
+}
+
+[data-rating="excellent"] {
+  --rating: var(--rating-excellent);
+}
+[data-rating="good"] {
+  --rating: var(--rating-good);
+}
+[data-rating="mixed"] {
+  --rating: var(--rating-mixed);
+}
+[data-rating="concerning"] {
+  --rating: var(--rating-concerning);
+}
+[data-rating="poor"] {
+  --rating: var(--rating-poor);
+}
+[data-rating="critical"] {
+  --rating: var(--rating-critical);
+}

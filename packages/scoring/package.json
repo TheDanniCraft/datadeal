@@ -1,0 +1,12 @@
+{
+  "type": "module",
+  "name": "@datadeal/scoring",
+  "dependencies": {
+    "@datadeal/contracts": "workspace:*"
+  },
+  "exports": "./index.ts",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc"
+  }
+}

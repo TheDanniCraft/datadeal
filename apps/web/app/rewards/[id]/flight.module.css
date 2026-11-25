@@ -1,0 +1,121 @@
+.sky {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: clamp(15rem, 41vw, 20rem);
+  border-radius: 1rem;
+  color: oklch(98% 0.005 260);
+  background:
+    radial-gradient(ellipse at 77% 35%, oklch(46% 0.101 270), transparent 60%),
+    linear-gradient(
+      165deg,
+      oklch(20% 0.051 258),
+      oklch(33% 0.084 265) 63%,
+      oklch(45% 0.082 251)
+    );
+}
+.skyNumber {
+  position: absolute;
+  z-index: 2;
+  top: clamp(1.3rem, 4vw, 2.3rem);
+  left: clamp(1.3rem, 4vw, 2.3rem);
+}
+.caption,
+.instrument {
+  font-size: 0.85rem;
+  letter-spacing: 0.01em;
+  font-weight: 500;
+}
+.offer {
+  font-size: clamp(3.25rem, 12vw, 5.4rem);
+  font-weight: 550;
+  line-height: 1.05;
+  letter-spacing: -0.055em;
+  font-variant-numeric: tabular-nums;
+}
+.offer span {
+  font-size: 1.1rem;
+  letter-spacing: 0;
+}
+.horizon {
+  position: absolute;
+  bottom: -22%;
+  left: -10%;
+  width: 120%;
+  height: 45%;
+  background: linear-gradient(
+    165deg,
+    oklch(52% 0.09 257),
+    oklch(26% 0.055 255)
+  );
+  clip-path: polygon(
+    0 40%,
+    19% 9%,
+    31% 33%,
+    48% 0,
+    62% 29%,
+    79% 11%,
+    100% 29%,
+    100% 100%,
+    0 100%
+  );
+}
+.trail {
+  position: absolute;
+  left: 7%;
+  top: calc(63% - var(--distance) * 15%);
+  width: calc(4% + var(--distance) * 65%);
+  height: calc(6% + var(--distance) * 13%);
+  border-bottom: 2px dashed oklch(85% 0.06 260 / 0.52);
+  border-radius: 0 0 66% 30%;
+  transform: rotate(-10deg);
+}
+.plane {
+  position: absolute;
+  left: calc(9% + var(--distance) * 63%);
+  top: calc(62% - var(--distance) * 45%);
+  width: clamp(4.5rem, 12vw, 7.5rem);
+  transition:
+    left 240ms linear,
+    top 240ms linear;
+  aspect-ratio: 1.55;
+  transform: rotate(-9deg);
+  filter: drop-shadow(0 7px 8px oklch(18% 0.04 255 / 0.35));
+}
+.plane i {
+  position: absolute;
+  inset: 0;
+  background: oklch(96% 0.018 260);
+  clip-path: polygon(0 31%, 100% 0, 27% 64%);
+}
+.plane i:nth-child(2) {
+  background: oklch(69% 0.076 264);
+  clip-path: polygon(27% 64%, 100% 0, 34% 99%);
+}
+.plane i:nth-child(3) {
+  background: oklch(87% 0.043 259);
+  clip-path: polygon(34% 71%, 100% 0, 64% 94%);
+}
+.plane[data-active="true"] {
+  animation: glide 2s ease-in-out infinite alternate;
+}
+.instrument {
+  position: absolute;
+  bottom: 1rem;
+  left: clamp(1.3rem, 4vw, 2.3rem);
+  font-variant-numeric: tabular-nums;
+}
+@keyframes glide {
+  to {
+    transform: translate(5%, -8%) rotate(-13deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sky {
+    --distance: 0.65 !important;
+  }
+  .plane[data-active="true"] {
+    transition: none;
+    animation: none;
+  }
+}

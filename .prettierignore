@@ -1,0 +1,9 @@
+bun.lock
+.next
+.output
+.wxt
+node_modules
+test-results
+playwright-report
+next-env.d.ts
+AGENTS.md

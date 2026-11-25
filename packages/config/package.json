@@ -1,0 +1,10 @@
+{
+  "type": "module",
+  "name": "@datadeal/config",
+  "dependencies": {},
+  "exports": "./index.ts",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc"
+  }
+}

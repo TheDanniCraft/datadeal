@@ -1,0 +1,13 @@
+{
+  "type": "module",
+  "name": "@datadeal/ai",
+  "dependencies": {
+    "zod": "^4",
+    "@datadeal/contracts": "workspace:*"
+  },
+  "exports": "./index.ts",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc"
+  }
+}

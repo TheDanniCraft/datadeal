@@ -1,0 +1,47 @@
+# Dependencies
+node_modules
+
+# Build output
+.next
+.output
+.wxt
+dist
+build
+*.tsbuildinfo
+next-env.d.ts
+
+# Test output and local review artifacts
+coverage
+playwright-report
+blob-report
+test-results
+.next-review
+
+# Local caches and tool state
+.fallow
+.turbo
+.cache
+.eslintcache
+graphify-out
+.claude/settings.local.json
+
+# Secrets and local environment (includes the local Postgres data dir)
+.env*
+!.env.example
+!.env.compose.example
+
+# Logs and local outboxes
+*.log
+logs
+
+# Internal working notes (contain local paths and account details)
+HANDOFF.md
+CONTINUATION.md
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea
+.vscode/*
+!.vscode/extensions.json
