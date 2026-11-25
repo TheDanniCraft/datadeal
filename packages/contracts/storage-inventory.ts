@@ -18,6 +18,9 @@ export const inventoryPhase = z.enum([
   "before_choice",
   "after_reject",
   "after_accept",
+  // Not seen in the measured visits; the site's policy names this provider
+  // for a feature the visitor has to use (booking, chat, contact form).
+  "on_use",
 ]);
 export type InventoryPhase = z.infer<typeof inventoryPhase>;
 const site = z
@@ -351,6 +354,36 @@ export function buildStorageInventory(
           signature: observation.signature,
         },
       );
+    }
+  }
+  // Providers the policy names but the passive visits never contacted.
+  for (const source of report.evidence) {
+    if (source.scanId !== report.id) continue;
+    const hosts =
+      source.kind === "declared_first_party" &&
+      source.observation?.type === "policy_section"
+        ? (source.observation.providerHosts ?? [])
+        : source.observation?.type === "provider_policy"
+          ? [source.observation.providerHost]
+          : [];
+    for (const host of hosts) {
+      const owner = getDomain(host, { allowPrivateDomains: true }) ?? host;
+      if (homeSite && owner === homeSite) continue;
+      const existing = recipients.get(owner);
+      if (existing) {
+        if (existing.phases.includes("on_use"))
+          merge(existing, "on_use", source.id);
+        continue;
+      }
+      recipients.set(owner, {
+        id: "rc-" + shortHash(owner),
+        domain: owner,
+        phases: ["on_use"],
+        fields: [],
+        linkedIdentifier: false,
+        answered: false,
+        evidenceIds: [source.id],
+      });
     }
   }
   const storageItems = [...storage.values()].sort((a, b) =>

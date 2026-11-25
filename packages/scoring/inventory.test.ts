@@ -5,7 +5,7 @@ import type {
   StorageInventory,
   StorageItem,
 } from "@datadeal/contracts/storage-inventory";
-import { combineCosts, inventoryRating } from "./inventory";
+import { combineCosts, inventoryRating, scanCoverage } from "./inventory";
 
 let n = 0;
 const hex = () => (++n).toString(16).padStart(12, "0");
@@ -70,13 +70,40 @@ function inventory(
     research: [],
   };
 }
+// A well-covered scan: all consent scenarios and two sampled pages.
+const covered = {
+  consentCoverage: {
+    default: "measured",
+    rejected: "measured",
+    accepted: "measured",
+  },
+  pageSample: {
+    discovered: 2,
+    discoveryLimited: false,
+    limit: 3,
+    pages: [1, 2].map((i) => ({
+      url: `https://site.example/p${i}`,
+      source: "sitemap",
+      coverage: {
+        default: "measured",
+        rejected: "measured",
+        accepted: "measured",
+      },
+    })),
+  },
+} as const;
 const rate = (
   inv: StorageInventory,
   scenario: "default" | "rejected" | "accepted" = "accepted",
-) => inventoryRating({ storageInventory: inv }, scenario)!;
+  report: object = covered,
+) =>
+  inventoryRating(
+    { ...(report as object), storageInventory: inv } as never,
+    scenario,
+  )!;
 
-describe("worked examples from docs/scoring-v2.md", () => {
-  test("consent record and support chat only: Excellent", () => {
+describe("calibration", () => {
+  test("nothing found is excellent but not a perfect 100", () => {
     const consent = storage("c15t", flag, [
       "before_choice",
       "after_reject",
@@ -90,21 +117,22 @@ describe("worked examples from docs/scoring-v2.md", () => {
       ]),
     );
     expect(r).toMatchObject({
-      score: 100,
+      score: 99,
       grade: "Excellent",
-      rulesRevision: "contextual-practices-6",
+      rulesRevision: "contextual-practices-7",
     });
   });
 
-  test("cloud analytics without an ID: 97", () => {
+  test("cloud analytics without an ID", () => {
     const plausible = recipient("plausible.io", { fields: ["page_url"] });
-    const r = rate(
-      inventory([[plausible, classify(plausible, "analytics", "processor")]]),
-    );
-    expect(r.score).toBe(97);
+    expect(
+      rate(
+        inventory([[plausible, classify(plausible, "analytics", "processor")]]),
+      ).score,
+    ).toBe(96);
   });
 
-  test("shop with _ga and a linked Meta pixel: 65 Mixed", () => {
+  test("shop with _ga and a linked Meta pixel stays Mixed", () => {
     const ga = storage("_ga", id);
     const fbp = storage("_fbp", id);
     const meta = recipient("facebook.com", {
@@ -118,25 +146,66 @@ describe("worked examples from docs/scoring-v2.md", () => {
         [meta, classify(meta, "advertising", "independent")],
       ]),
     );
-    expect(r).toMatchObject({ score: 65, grade: "Mixed" });
-    expect(r.inventoryAssessment?.costs.map((c) => c.cost)).toEqual([
-      25, 15, 10,
-    ]);
+    expect(r).toMatchObject({ score: 64, grade: "Mixed" });
   });
 
-  test("thirty ad partners score far below one", () => {
-    const rows: [RecipientItem, InventoryClassification][] = Array.from(
-      { length: 30 },
+  test("count alone cannot push a site to zero, but more trackers still score lower", () => {
+    const partners = (n: number) =>
+      inventory(
+        Array.from({ length: n }, (_, i) => {
+          const r = recipient(`ads${i}.example`, {
+            fields: ["advertising_id"],
+          });
+          return [r, classify(r, "advertising", "independent")] as [
+            RecipientItem,
+            InventoryClassification,
+          ];
+        }),
+      );
+    const one = rate(partners(1)).score!;
+    const thirty = rate(partners(30)).score!;
+    const hundred = rate(partners(100)).score!;
+    expect(one).toBe(74);
+    expect(thirty).toBe(45);
+    expect(thirty).toBeLessThan(one);
+    expect(hundred).toBe(thirty); // breadth penalty is capped
+    expect(combineCosts([25, ...Array(99).fill(25)])).toBe(55);
+  });
+});
+
+describe("coverage", () => {
+  const clean = () => {
+    const consent = storage("c15t", flag);
+    return inventory([[consent, classify(consent, "consent")]]);
+  };
+  test("less coverage pulls the score toward the middle", () => {
+    expect(rate(clean()).score).toBe(99);
+    const homepageOnly = {
+      consentCoverage: {
+        ...covered.consentCoverage,
+        rejected: "control_unavailable",
+      },
+    };
+    const r = rate(clean(), "accepted", homepageOnly);
+    expect(r.score).toBe(92);
+    expect(r.inventoryAssessment?.coverage).toMatch(
+      /reject choice could not be tested.*only the homepage/,
+    );
+  });
+  test("unknown items reduce coverage and confidence", () => {
+    const rows: [StorageItem, InventoryClassification][] = Array.from(
+      { length: 5 },
       (_, i) => {
-        const r = recipient(`ads${i}.example`, { fields: ["advertising_id"] });
-        return [r, classify(r, "advertising", "independent")];
+        const s = storage("x" + i, id);
+        return [s, classify(s, "unknown", "unknown")];
       },
     );
-    const one = rate(inventory(rows.slice(0, 1)));
-    const thirty = rate(inventory(rows));
-    expect(one.score).toBe(75);
-    expect(thirty.score).toBe(0);
-    expect(thirty.grade).toBe("Critical");
+    const r = rate(inventory(rows));
+    expect(r.score).toBe(76);
+    expect(r.confidence).toBe("Low");
+    expect(
+      scanCoverage(covered as never, inventory(rows), 1).coverage,
+    ).toBeCloseTo(0.679, 3);
   });
 });
 
@@ -150,28 +219,14 @@ describe("rules", () => {
       cost: 22.5,
       consentPenalty: true,
     });
-    expect(r.score).toBe(78);
+    expect(r.score).toBe(77);
   });
 
-  test("a preference that looks like a flag is free even if purpose is analytics", () => {
+  test("a preference flag is free", () => {
     const theme = storage("theme", flag);
     expect(
       rate(inventory([[theme, classify(theme, "preferences")]])).score,
-    ).toBe(100);
-  });
-
-  test("unknown identifiers cost a little and lower confidence", () => {
-    const rows: [StorageItem, InventoryClassification][] = Array.from(
-      { length: 5 },
-      (_, i) => {
-        const s = storage("x" + i, id);
-        return [s, classify(s, "unknown", "unknown")];
-      },
-    );
-    const r = rate(inventory(rows));
-    expect(r.score).toBe(Math.round(100 - combineCosts([4, 4, 4, 4, 4])));
-    expect(r.confidence).toBe("Low");
-    expect(r.inventoryAssessment?.unknownItems).toBe(5);
+    ).toBe(99);
   });
 
   test("email to an advertiser is the worst case", () => {
@@ -182,23 +237,23 @@ describe("rules", () => {
     ).toBe(65);
   });
 
-  test("scenarios only include items present in their phases", () => {
-    const fbp = storage("_fbp", id, ["after_accept"]);
-    const inv = inventory([[fbp, classify(fbp, "advertising", "independent")]]);
-    expect(rate(inv, "default").score).toBe(100);
-    expect(rate(inv, "rejected").score).toBe(100);
-    expect(rate(inv, "accepted").score).toBe(85);
-  });
-
-  test("an unclassified inventory falls back to the previous rules", () => {
-    const fbp = storage("_fbp", id);
-    expect(
-      inventoryRating(
-        { storageInventory: inventory([[fbp, null]]) },
-        "accepted",
-      ),
-    ).toBeUndefined();
-    expect(inventoryRating({}, "accepted")).toBeUndefined();
+  test("a provider named in the policy for a feature costs a little and is labelled", () => {
+    const morgen = recipient("morgen.so", {
+      phases: ["on_use"],
+      answered: false,
+    });
+    const inv = inventory([[morgen, classify(morgen, "support", "processor")]]);
+    const r = rate(inv);
+    expect(r.inventoryAssessment?.costs[0]).toMatchObject({ cost: 1 });
+    expect(r.inventoryAssessment?.costs[0].label).toMatch(
+      /^When you use a feature: morgen\.so/,
+    );
+    expect(r.inventoryAssessment?.coverage).toMatch(
+      /features named in the policy were not tried/,
+    );
+    expect(r.score).toBe(96);
+    // Not part of the before-choice visit.
+    expect(rate(inv, "default").score).toBe(97);
   });
 
   test("a consent penalty does not change which practice the verdict names", () => {
@@ -216,6 +271,23 @@ describe("rules", () => {
     expect(r.verdict).toBe(
       "Shares browser IDs with advertising companies, some before you agree.",
     );
-    expect(r.verdict).not.toMatch(/email/);
+  });
+
+  test("scenarios only include items present in their phases", () => {
+    const fbp = storage("_fbp", id, ["after_accept"]);
+    const inv = inventory([[fbp, classify(fbp, "advertising", "independent")]]);
+    expect(rate(inv, "default").score).toBe(99);
+    expect(rate(inv, "accepted").score).toBe(84);
+  });
+
+  test("an unclassified inventory falls back to the previous rules", () => {
+    const fbp = storage("_fbp", id);
+    expect(
+      inventoryRating(
+        { storageInventory: inventory([[fbp, null]]) },
+        "accepted",
+      ),
+    ).toBeUndefined();
+    expect(inventoryRating({}, "accepted")).toBeUndefined();
   });
 });

@@ -41,6 +41,8 @@ export const inventoryInstructions = [
   "written by a third-party script (e.g. _ga, _fbp, _gcl_au); classify it by that vendor's use.",
   "A recipient with via.kind = first_party_proxy is the site's own domain receiving a known vendor's event",
   "payload (e.g. Plausible); the site forwards it to that vendor. Classify it by that vendor's use.",
+  "A recipient whose only phase is on_use was not contacted during the visits; the site's policy names it for",
+  "a feature the visitor chooses to use (booking, chat, forms). Classify it from the cited policy text.",
   "If you cannot tell what an item does, use purpose unknown and confidence low. You may request research on up",
   "to 3 recipient domains from the inventory whose own privacy or cookie documentation would explain unknown",
   "items. Do not request research for well-known vendors.",

@@ -33,30 +33,34 @@ therefore cannot tell a Chatwoot conversation cookie from an advertising ID.
 Always the **Accept all** visit, for every site (the typical visitor's choice). Before-choice and reject
 results stay visible as comparisons.
 
-## Rubric (to confirm)
+## Rubric (revision `contextual-practices-7`)
 
-Start at **100**. Each row/request gets a cost; costs combine as _worst + breadth_. Sort costs descending,
-then `score = 100 − c₁ − c₂·0.5 − c₃·0.25 − …` (each further cost counts half the previous weight, but at
-least 0.1), floored at 0. One bad practice is never drowned out, and thirty ad partners score clearly below one.
+Each classified row or request gets a cost (table below). The score is built in three steps:
 
-| Practice (accept-all visit)                                                                  | Cost                      |
-| -------------------------------------------------------------------------------------------- | ------------------------- |
-| Essential, security, consent record, preferences, support conversation (e.g. Chatwoot)       | 0                         |
-| First-party / processor analytics without a cross-site ID (e.g. self-hosted Plausible/Umami) | 3                         |
-| Analytics with a persistent visitor ID (e.g. `_ga`)                                          | 10                        |
-| Unknown purpose, persistent and identifier-like, after research                              | 4 (and lowers confidence) |
-| Independent third party receives data (no identifier observed)                               | 8                         |
-| Advertising / social cookie with a persistent identifier                                     | 15                        |
-| Identifier sent to an independent advertising recipient (linked)                             | 25                        |
-| Email-shaped value sent to an advertising recipient                                          | 35                        |
+1. **Worst practice** counts in full.
+2. **Breadth**: everything else adds `6 × log2(1 + sum_of_other_costs / 10)`, capped at **30**. More trackers
+   are worse, each extra one matters less, and count alone cannot push a site to zero.
+3. **Coverage**: `score = 50 + (raw − 50) × coverage`. A scan that saw less cannot claim a perfect or a
+   hopeless result. Coverage multiplies: reject choice untested ×0.93; homepage only ×0.90, one sampled page
+   ×0.94, two or more ×0.97; features named in the policy not tried ×0.97; capture limits hit ×0.95;
+   unknown items ×(1 − 0.3 × unknown share). The report states the coverage and why.
 
-**Consent penalty**: any non-essential item that already appears **before the choice** or **after
-reject** costs an extra **+50%** of its cost (tracking without consent, which GDPR/ePrivacy does not allow
-by default).
+Rows the policy names for a feature the visitor chooses (booking, chat; phase `on_use`) are listed as
+"When you use a feature" and cost 1 for a contracted service, or half the normal cost if they track.
+Same-site requests carrying a known vendor event (e.g. a Plausible proxy) count as that vendor.
 
-**Confidence**: high when most rows are classified with cited reasons; lowered by unknown rows, capped
-captures or a failed accept-all click. A site is **Unrated** only when the accept-all visit itself could not
-be measured.
+| Practice (accept-all visit)                                                                | Cost                    |
+| ------------------------------------------------------------------------------------------ | ----------------------- |
+| Essential, security, consent record, preferences, support conversation                     | 0                       |
+| First-party / processor analytics without a cross-site ID (e.g. Plausible, also via proxy) | 3                       |
+| Unknown purpose, persistent and identifier-like, after research                            | 4 (and lowers coverage) |
+| Independent third party receives data (no identifier observed)                             | 8                       |
+| Analytics with a persistent visitor ID (e.g. `_ga`)                                        | 10                      |
+| Advertising / social cookie with a persistent identifier                                   | 15                      |
+| Identifier sent to an independent advertising recipient (linked)                           | 25                      |
+| Email-shaped value sent to an advertising recipient                                        | 35                      |
+
+**Consent penalty**: a non-essential item already present before the choice or after reject costs +50%.
 
 Grades unchanged: 90 Excellent · 75 Good · 60 Mixed · 40 Concerning · 20 Poor · 0 Critical.
 

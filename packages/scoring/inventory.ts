@@ -8,7 +8,7 @@ import type {
 } from "@datadeal/contracts/storage-inventory";
 import { gradeForScore, methodologyVersion } from "./grades";
 
-export const inventoryRulesRevision = "contextual-practices-6";
+export const inventoryRulesRevision = "contextual-practices-7";
 type Scenario = "default" | "rejected" | "accepted";
 
 /** Costs from docs/scoring-v2.md. The analyst classifies; these numbers decide. */
@@ -39,8 +39,20 @@ const advertisingPurposes = new Set([
 const scenarioPhases: Record<Scenario, InventoryPhase[]> = {
   default: ["before_choice"],
   rejected: ["before_choice", "after_reject"],
-  accepted: ["before_choice", "after_reject", "after_accept"],
+  accepted: ["before_choice", "after_reject", "after_accept", "on_use"],
 };
+/** Breadth: a bounded, logarithmic penalty for everything after the worst. */
+export const breadth = { perDoubling: 6, cap: 30, unit: 10 } as const;
+/** How much of the distance from 50 the coverage of a scan supports. */
+export const coverageWeights = {
+  rejectUntested: 0.93,
+  homepageOnly: 0.9,
+  oneSampledPage: 0.94,
+  severalSampledPages: 0.97,
+  featuresUntested: 0.97,
+  captureLimited: 0.95,
+  unknownShare: 0.3,
+} as const;
 
 type Cost = {
   itemId: string;
@@ -71,7 +83,23 @@ function storageCost(item: StorageItem, c?: InventoryClassification) {
   return persistentId ? inventoryCosts.unknownIdentifier : 0;
 }
 
+const declaredOnly = (item: RecipientItem) =>
+  item.phases.length === 1 && item.phases[0] === "on_use";
+
 function recipientCost(item: RecipientItem, c?: InventoryClassification) {
+  if (declaredOnly(item)) {
+    // Named in the policy for a feature the visitor chooses to use; the
+    // passive visit could not observe what it receives.
+    const observed = observedRecipientCost(item, c);
+    return observed === 0 ? 1 : observed / 2;
+  }
+  return observedRecipientCost(item, c);
+}
+
+function observedRecipientCost(
+  item: RecipientItem,
+  c?: InventoryClassification,
+) {
   const purpose = c?.purpose ?? "unknown";
   const controller = c?.controller ?? "unknown";
   const tracking =
@@ -105,14 +133,77 @@ const proxyLabels = {
 const storageLabel = (item: StorageItem) =>
   `${item.mechanism === "cookie" ? "Cookie" : item.mechanism === "local_storage" ? "Local storage" : "Session storage"} ${item.name}${item.site ? " (" + item.site + ")" : ""}`;
 
-/** Breadth weights: full, half, quarter, … but never below a tenth. */
+/**
+ * The worst practice counts in full. Everything else adds a logarithmic,
+ * capped penalty: more trackers are worse, each extra one matters less,
+ * and count alone cannot push a site to zero.
+ */
 export function combineCosts(costs: readonly number[]) {
-  return [...costs]
-    .sort((a, b) => b - a)
-    .reduce(
-      (total, cost, index) => total + cost * Math.max(0.5 ** index, 0.1),
-      0,
+  const [worst = 0, ...rest] = [...costs].sort((a, b) => b - a);
+  const others = rest.reduce((sum, cost) => sum + cost, 0);
+  return (
+    worst +
+    Math.min(
+      breadth.cap,
+      breadth.perDoubling * Math.log2(1 + others / breadth.unit),
+    )
+  );
+}
+
+type CoverageInput = Pick<
+  ScanReport,
+  "consentCoverage" | "pageSample" | "evidence" | "id"
+>;
+
+/**
+ * Share of the distance from the midpoint (50) that the evidence supports.
+ * A scan that saw less cannot claim a perfect or a hopeless result.
+ */
+export function scanCoverage(
+  report: Partial<CoverageInput>,
+  inventory: StorageInventory,
+  unknownShare: number,
+) {
+  const w = coverageWeights;
+  const reasons: string[] = [];
+  let c = 1;
+  if (report.consentCoverage?.rejected !== "measured") {
+    c *= w.rejectUntested;
+    reasons.push("the reject choice could not be tested");
+  }
+  const sampled =
+    report.pageSample?.pages.filter((p) => p.coverage.accepted === "measured")
+      .length ?? 0;
+  c *=
+    sampled === 0
+      ? w.homepageOnly
+      : sampled === 1
+        ? w.oneSampledPage
+        : w.severalSampledPages;
+  reasons.push(
+    sampled === 0
+      ? "only the homepage was measured"
+      : `the homepage and ${sampled} sampled ${sampled === 1 ? "page were" : "pages were"} measured`,
+  );
+  if (inventory.recipients.some(declaredOnly)) {
+    c *= w.featuresUntested;
+    reasons.push("features named in the policy were not tried");
+  }
+  const limited =
+    inventory.truncated ||
+    (report.evidence ?? []).some(
+      (e) =>
+        e.scanId === report.id &&
+        (e.observation?.type === "browser_consent_counts" ||
+          e.observation?.type === "browser_content_page") &&
+        e.observation.requestInspection?.limitReached,
     );
+  if (limited) {
+    c *= w.captureLimited;
+    reasons.push("the capture hit its size limits");
+  }
+  c *= 1 - w.unknownShare * unknownShare;
+  return { coverage: c, reasons };
 }
 
 export function inventoryCostsFor(
@@ -154,7 +245,9 @@ export function inventoryCostsFor(
       item,
       item.via
         ? `${proxyLabels[item.via.vendor]} event forwarded via ${item.domain}`
-        : "Data sent to " + item.domain,
+        : declaredOnly(item)
+          ? `When you use a feature: ${item.domain} (named in the privacy policy)`
+          : "Data sent to " + item.domain,
       recipientCost(item, byId.get(item.id)),
     );
   return costs.sort((a, b) => b.cost - a.cost);
@@ -182,7 +275,7 @@ function verdictFor(costs: Cost[]) {
 
 /** Scoring v2 rating for one scenario, or undefined if not classified. */
 export function inventoryRating(
-  report: Pick<ScanReport, "storageInventory">,
+  report: Pick<ScanReport, "storageInventory"> & Partial<CoverageInput>,
   scenario: Scenario,
 ): PublishedScoring | undefined {
   const inventory = report.storageInventory;
@@ -190,18 +283,17 @@ export function inventoryRating(
   const itemCount = inventory.storage.length + inventory.recipients.length;
   if (itemCount && !inventory.classifications.length) return undefined;
   const costs = inventoryCostsFor(inventory, scenario);
-  const score = Math.max(
-    0,
-    Math.round(100 - combineCosts(costs.map(({ cost }) => cost))),
-  );
+  const raw = Math.max(0, 100 - combineCosts(costs.map(({ cost }) => cost)));
   const unknown = costs.filter((c) => c.unknown).length;
   const classified = inventory.classifications.length;
+  const { coverage, reasons } = scanCoverage(
+    report,
+    inventory,
+    costs.length ? unknown / costs.length : 0,
+  );
+  const score = Math.round(50 + (raw - 50) * coverage);
   const confidence =
-    !inventory.truncated &&
-    classified >= itemCount * 0.9 &&
-    unknown <= Math.max(2, costs.length * 0.25)
-      ? "Moderate"
-      : "Low";
+    coverage >= 0.85 && classified >= itemCount * 0.9 ? "Moderate" : "Low";
   return {
     methodologyVersion,
     rulesRevision: inventoryRulesRevision,
@@ -211,7 +303,7 @@ export function inventoryRating(
     confidence,
     adjustments: [],
     inventoryAssessment: {
-      coverage: `Based on ${inventory.storage.length} storage ${inventory.storage.length === 1 ? "item" : "items"} and ${inventory.recipients.length} outside ${inventory.recipients.length === 1 ? "recipient" : "recipients"} measured on the tested pages${inventory.research.length ? `, with ${inventory.research.length} vendor ${inventory.research.length === 1 ? "policy" : "policies"} researched` : ""}. ${unknown ? `${unknown} could not be identified and lower the confidence.` : "Every item was identified."}`,
+      coverage: `Coverage ${Math.round(coverage * 100)}%: ${reasons.join(", ")}. Based on ${inventory.storage.length} storage ${inventory.storage.length === 1 ? "item" : "items"} and ${inventory.recipients.length} outside ${inventory.recipients.length === 1 ? "recipient" : "recipients"} measured on the tested pages${inventory.research.length ? `, with ${inventory.research.length} vendor ${inventory.research.length === 1 ? "policy" : "policies"} researched` : ""}. ${unknown ? `${unknown} could not be identified and lower the confidence.` : "Every item was identified."}`,
       costs: costs
         .filter(({ cost }) => cost > 0)
         .slice(0, 48)
