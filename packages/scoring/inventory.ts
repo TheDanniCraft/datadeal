@@ -47,6 +47,8 @@ type Cost = {
   label: string;
   vendor: string | null;
   cost: number;
+  // Cost before the consent penalty; decides which practice it was.
+  baseCost: number;
   consentPenalty: boolean;
   reason: string;
   evidenceIds: string[];
@@ -129,6 +131,7 @@ export function inventoryCostsFor(
       label,
       vendor: c?.vendor ?? null,
       cost: withoutConsent ? base * consentPenalty : base,
+      baseCost: base,
       consentPenalty: withoutConsent,
       reason: c?.reason ?? "Not classified.",
       evidenceIds: [
@@ -150,7 +153,9 @@ export function inventoryCostsFor(
 }
 
 function verdictFor(costs: Cost[]) {
-  const worst = costs[0]?.cost ?? 0;
+  // Compare practices by their base cost: a 50% consent penalty must not
+  // turn a linked ad ID (25 → 37.5) into the email case (35).
+  const worst = Math.max(0, ...costs.map(({ baseCost }) => baseCost));
   const before = costs.some((c) => c.consentPenalty && c.cost > 0);
   if (worst >= inventoryCosts.contactAdvertising)
     return "An email-shaped value reached an advertising company.";
@@ -202,7 +207,7 @@ export function inventoryRating(
       costs: costs
         .filter(({ cost }) => cost > 0)
         .slice(0, 48)
-        .map(({ unknown: _u, ...c }) => ({
+        .map(({ unknown: _u, baseCost: _b, ...c }) => ({
           ...c,
           cost: Math.round(c.cost * 10) / 10,
         })),

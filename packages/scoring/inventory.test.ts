@@ -200,4 +200,22 @@ describe("rules", () => {
     ).toBeUndefined();
     expect(inventoryRating({}, "accepted")).toBeUndefined();
   });
+
+  test("a consent penalty does not change which practice the verdict names", () => {
+    const permutive = recipient("permutive.app", {
+      fields: ["identifier"],
+      linkedIdentifier: true,
+      phases: ["before_choice", "after_accept"],
+    });
+    const r = rate(
+      inventory([
+        [permutive, classify(permutive, "advertising", "independent")],
+      ]),
+    );
+    expect(r.inventoryAssessment?.costs[0].cost).toBe(37.5);
+    expect(r.verdict).toBe(
+      "Shares browser IDs with advertising companies, some before you agree.",
+    );
+    expect(r.verdict).not.toMatch(/email/);
+  });
 });
