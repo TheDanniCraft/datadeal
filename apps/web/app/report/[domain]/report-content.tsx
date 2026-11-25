@@ -201,42 +201,51 @@ function ReportObservations({ rows }: { rows: ObservationRow[] }) {
       >
         When you use this site
       </h2>
-      <div id="report-visitor-findings" className="grid gap-2.5 sm:grid-cols-2">
+      <div
+        id="report-visitor-findings"
+        className="divide-y divide-separator overflow-hidden rounded-2xl border border-separator"
+      >
         {(expanded ? findings : findings.slice(0, 4)).map((finding) => {
           const { source, title, kind, detail, evidenceLabel, quote, icon } =
             finding;
           return (
-            <div
-              key={source.id + title}
-              className="flex min-w-0 flex-col rounded-2xl border border-separator/60 bg-surface"
-            >
+            <div key={source.id + title} className="min-w-0">
               <a
                 href={"#evidence-" + source.id}
                 data-citation-quote={quote}
                 aria-haspopup="dialog"
                 aria-label={title + " — " + evidenceLabel}
-                className="group flex min-w-0 flex-1 flex-col gap-2 rounded-2xl p-4 text-foreground no-underline transition-colors hover:bg-default/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent sm:p-5"
+                className="group grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 p-4 text-foreground no-underline transition-colors hover:bg-default/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent sm:px-5"
               >
-                <span className="flex items-center gap-2 text-xs text-muted">
+                <span className="mt-0.5 grid size-9 place-items-center rounded-lg bg-default text-muted">
                   <ReportIcon
                     name={icon ?? (kind === "Observed" ? "glance" : "policy")}
                   />
-                  {kind === "Observed" ? "Browser visit" : "Site policy"}
-                  <span className="ms-auto text-muted group-hover:text-accent">
-                    <ReportIcon name="open" />
-                  </span>
                 </span>
-                <strong className="font-semibold text-base leading-snug">
-                  {title}
-                </strong>
-                {detail && (
-                  <span className="text-sm leading-relaxed">{detail}</span>
-                )}
+                <span className="grid min-w-0 gap-0.5">
+                  <span className="text-xs text-muted">
+                    {kind === "Observed" ? "Browser visit" : "Site policy"}
+                  </span>
+                  <strong className="text-[.95rem] leading-snug font-semibold group-hover:underline">
+                    {title}
+                  </strong>
+                  {detail && (
+                    <span className="text-sm leading-relaxed text-muted">
+                      {detail}
+                    </span>
+                  )}
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="mt-2 text-muted group-hover:text-accent"
+                >
+                  ›
+                </span>
               </a>
               {providerLinks
                 .filter(({ related }) => related === finding)
                 .map(({ host, entries }) => (
-                  <div key={host} className="-mt-2 px-4 pb-1 sm:px-5">
+                  <div key={host} className="-mt-2 ps-16 pe-4 pb-3 sm:pe-5">
                     <ProviderPolicyLink host={host} rows={entries} />
                   </div>
                 ))}
@@ -1936,42 +1945,56 @@ export function ReportContent({
   );
   const visitSnapshot = headlineVisit && (
     <section
-      className="report-visit-snapshot grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-y-1 rounded-xl border border-border px-4 py-3 sm:grid-cols-[minmax(8rem,1fr)_minmax(0,2fr)] sm:gap-x-4 sm:px-6 sm:py-4"
+      className="report-visit-snapshot grid min-w-0 gap-3 rounded-2xl border border-border p-4 sm:p-6"
       aria-labelledby="visit-snapshot-title"
     >
-      <div className="snapshot-heading col-start-1 row-start-1 flex items-center gap-2 text-muted">
-        <ReportIcon name="glance" />
-        <h2
-          className="text-base! font-semibold! text-foreground"
-          id="visit-snapshot-title"
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-muted">
+          <ReportIcon name="glance" />
+          <h2
+            className="text-base! font-semibold! text-foreground"
+            id="visit-snapshot-title"
+          >
+            {score?.noChoiceEvidence
+              ? "Signed-out homepage visit"
+              : "Accept-all visit"}
+          </h2>
+        </div>
+        <a
+          className="inline-link shrink-0 text-sm"
+          href={"#evidence-" + headlineVisit.id}
         >
-          {score?.noChoiceEvidence
-            ? "Signed-out homepage visit"
-            : "Accept-all visit"}
-        </h2>
+          Visit evidence ›
+        </a>
       </div>
-      <dl className="col-span-full row-start-2 my-2 grid grid-cols-3 items-start gap-2 sm:col-span-1 sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:my-0 [&>div]:grid [&_dt]:text-xs [&_dt]:text-muted [&_dd]:row-start-1 [&_dd]:text-lg [&_dd]:font-semibold [&_dd]:tabular-nums">
-        <div>
-          <dt>Attempted requests</dt>
-          <dd>{headlineVisit.requests}</dd>
-        </div>
-        <div>
-          <dt>Outside domains</dt>
-          <dd>
-            {headlineVisit.outside === 20 ? "20+" : headlineVisit.outside}
-          </dd>
-        </div>
-        <div>
-          <dt>Cookies at end</dt>
-          <dd>{headlineVisit.cookies}</dd>
-        </div>
+      <dl className="m-0 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {(
+          [
+            ["Requests", String(headlineVisit.requests)],
+            [
+              "Outside domains",
+              headlineVisit.outside === 20
+                ? "20+"
+                : String(headlineVisit.outside),
+            ],
+            ["Cookies at end", String(headlineVisit.cookies)],
+            [
+              "Storage entries",
+              headlineVisit.storage
+                ? String(
+                    headlineVisit.storage.localEntries +
+                      headlineVisit.storage.sessionEntries,
+                  )
+                : "–",
+            ],
+          ] as const
+        ).map(([label, value]) => (
+          <div key={label} className="rounded-xl bg-default/60 px-3 py-2.5">
+            <dt className="text-xs text-muted">{label}</dt>
+            <dd className="m-0 text-xl font-semibold tabular-nums">{value}</dd>
+          </div>
+        ))}
       </dl>
-      <a
-        className="inline-link col-start-2 row-start-1 w-fit text-xs sm:col-start-1 sm:row-start-2"
-        href={"#evidence-" + headlineVisit.id}
-      >
-        Visit evidence
-      </a>
     </section>
   );
   const analysisOverview = (summaryClaims.length > 0 || visitSnapshot) && (
