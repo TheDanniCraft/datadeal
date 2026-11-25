@@ -86,26 +86,30 @@ export function signalList(signals: ReportSignals): Signal[] {
 }
 
 /**
- * A region code in an SVG box the height of the icons, so it sits on the
- * same centre line instead of the text baseline.
+ * A region code drawn on the icons' 24-unit grid: the outline fills the same
+ * 3–21 area as the other glyphs, so it centres and weighs like an icon.
  */
 function RegionTag({ code }: { code: string }) {
   return (
     <svg
       aria-hidden="true"
-      viewBox="0 0 20 16"
-      width="20"
-      height="16"
-      className="h-4! w-5!"
+      viewBox="0 0 24 24"
+      width="18"
+      height="18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
     >
+      <rect x="1.8" y="3.8" width="20.4" height="16.4" rx="4" />
       <text
-        x="10"
-        y="12.3"
+        x="12"
+        y="16.1"
         textAnchor="middle"
         fill="currentColor"
-        fontSize="12"
+        stroke="none"
+        fontSize="11.5"
         fontWeight="700"
-        letterSpacing="0.2"
+        letterSpacing="-0.2"
         fontFamily="ui-sans-serif, system-ui, sans-serif"
       >
         {code}
@@ -118,7 +122,7 @@ function Badge({ signal }: { signal: Signal }) {
   return (
     <span
       className={
-        "inline-flex h-5 min-w-5 items-center justify-center [&_svg]:size-4 " +
+        "inline-flex size-5 items-center justify-center [&_svg]:size-[18px] " +
         signal.tone
       }
     >
