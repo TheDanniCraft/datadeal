@@ -861,6 +861,7 @@ export function Flow({
   illustrative?: boolean;
 }) {
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState<number>();
   const [touchPan, setTouchPan] = useState(false);
   const helpId = useId();
   const drag = useRef<{ id: number; x: number; y: number } | null>(null);
@@ -906,29 +907,44 @@ export function Flow({
   const relatedService =
     provider?.relatedSite === currentHost.toLowerCase().replace(/^www\./, "");
   const visited = [host, ...path.map((entry) => entry.host)];
-  const offset = group * 5;
-  const count = Math.min(connections.length - offset, 5);
-  const clustered = offset + count < connections.length;
-  const visible = connections.slice(offset, offset + count);
-  const angleCount = visible.length + Number(clustered);
-  const points = Array.from({ length: angleCount }, (_, index) => {
-    const angle =
-      (angleCount <= 2 ? -Math.PI / 4 : -Math.PI / 2) +
-      (2 * Math.PI * index) / angleCount;
-    return {
-      // Match CSS percentage precision across the server and browser engines.
-      x: Number((50 + 32 * Math.cos(angle)).toFixed(4)),
-      y: Number((50 + 34 * Math.sin(angle)).toFixed(4)),
-    };
+  // Every connection is drawn: concentric rings holding 6, 12, 18, … nodes.
+  const visible = connections;
+  const rings: number[] = [];
+  for (let left = visible.length, k = 0; left > 0; k++) {
+    const take = Math.min(left, 6 + 6 * k);
+    rings.push(take);
+    left -= take;
+  }
+  const outer = rings.length ? 20 + 14 * (rings.length - 1) : 0;
+  const points = rings.flatMap((take, k) => {
+    const radius = rings.length === 1 ? 32 : 20 + 14 * k;
+    return Array.from({ length: take }, (_, index) => {
+      const angle =
+        (take <= 2 ? -Math.PI / 4 : -Math.PI / 2) +
+        (k % 2) * (Math.PI / take) +
+        (2 * Math.PI * index) / take;
+      return {
+        // Match CSS percentage precision across the server and browser engines.
+        x: Number((50 + radius * Math.cos(angle)).toFixed(4)),
+        y: Number((50 + radius * 1.04 * Math.sin(angle)).toFixed(4)),
+      };
+    });
   });
+  // Start zoomed out just enough for the outer ring to fit.
+  const fitZoom = Math.min(1, 44 / Math.max(outer, 1));
+  const scale = zoom ?? fitZoom;
+  const dense = visible.length > 12;
+  const showLabels = !dense || scale >= 1.3;
   function moveGraph(target: HTMLElement, x: number, y: number) {
     const bound = (value: number, limit: number) =>
       Math.max(-limit, Math.min(limit, value));
     setPan({
-      x: bound(x, target.clientWidth * 0.65),
-      y: bound(y, target.clientHeight * 0.65),
+      x: bound(x, target.clientWidth * 0.65 * scale),
+      y: bound(y, target.clientHeight * 0.65 * scale),
     });
   }
+  const zoomBy = (factor: number) =>
+    setZoom(Math.min(2.5, Math.max(0.35, scale * factor)));
   const network = (
     <div
       className="flow-network relative h-[clamp(21rem,48vw,32rem)] cursor-grab touch-pan-y overflow-hidden select-none focus-visible:outline-2 focus-visible:-outline-offset-2 active:cursor-grabbing data-touch-pan:touch-none"
@@ -963,6 +979,11 @@ export function Flow({
       onLostPointerCapture={() => {
         drag.current = null;
       }}
+      onWheel={(event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        zoomBy(event.deltaY < 0 ? 1.15 : 1 / 1.15);
+      }}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;
         const directions: Record<string, [number, number]> = {
@@ -983,7 +1004,11 @@ export function Flow({
     >
       <div
         className="flow-viewport absolute inset-0"
-        style={{ translate: `${pan.x}px ${pan.y}px` }}
+        style={{
+          translate: `${pan.x}px ${pan.y}px`,
+          scale: String(scale),
+          transformOrigin: "50% 50%",
+        }}
       >
         <svg
           className="flow-lines absolute inset-0 size-full stroke-muted opacity-65 [&_[data-evidence=observed]]:stroke-accent [&_[data-evidence=both]]:stroke-accent"
@@ -1018,9 +1043,7 @@ export function Flow({
                   ? `url(#${helpId}-arrow)`
                   : undefined
               }
-              data-evidence={
-                visible[index] ? flowEvidence(visible[index]) : "cluster"
-              }
+              data-evidence={flowEvidence(visible[index])}
               strokeDasharray={
                 visible[index]?.declared
                   ? visible[index].observed
@@ -1044,11 +1067,16 @@ export function Flow({
             <Button
               key={item.label}
               size="sm"
-              aria-pressed={selected === offset + index}
+              aria-pressed={selected === index}
               aria-label={item.label}
               aria-describedby={helpId + "-" + flowEvidence(item)}
-              variant={selected === offset + index ? "primary" : "secondary"}
-              className="flow-destination absolute! max-w-[min(34%,10rem)] -translate-1/2 text-center leading-tight whitespace-normal wrap-anywhere size-[clamp(2.8rem,8vw,4.5rem)] rounded-full! p-0!"
+              variant={selected === index ? "primary" : "secondary"}
+              className={
+                "flow-destination absolute! max-w-[min(34%,10rem)] -translate-1/2 text-center leading-tight whitespace-normal wrap-anywhere rounded-full! p-0! " +
+                (dense
+                  ? "size-[clamp(2.2rem,5vw,3rem)]"
+                  : "size-[clamp(2.8rem,8vw,4.5rem)]")
+              }
               style={{
                 left: points[index].x + "%",
                 top: points[index].y + "%",
@@ -1056,7 +1084,7 @@ export function Flow({
               isDisabled={!ready || loading}
               onPress={() => {
                 setNotice("");
-                setSelected(offset + index);
+                setSelected(index);
               }}
             >
               {icon ? (
@@ -1083,7 +1111,10 @@ export function Flow({
                 </svg>
               )}
               <span
-                className="flow-label pointer-events-none absolute top-full left-1/2 mt-1.5 w-max max-w-[min(31vw,13rem)] -translate-x-1/2 truncate text-xs leading-tight text-foreground"
+                className={
+                  "flow-label pointer-events-none absolute top-full left-1/2 mt-1.5 w-max max-w-[min(31vw,13rem)] -translate-x-1/2 truncate text-xs leading-tight text-foreground " +
+                  (showLabels || selected === index ? "" : "sr-only")
+                }
                 aria-hidden="true"
               >
                 {item.label}
@@ -1091,34 +1122,37 @@ export function Flow({
             </Button>
           );
         })}
-        {clustered && (
-          <Button
-            className="flow-destination absolute! max-w-[min(34%,10rem)] -translate-1/2 text-center leading-tight whitespace-normal wrap-anywhere h-auto min-h-11 py-1.5"
-            size="sm"
-            variant="secondary"
-            style={{
-              left: points[count].x + "%",
-              top: points[count].y + "%",
-            }}
-            isDisabled={!ready || loading}
-            onPress={() => {
-              setGroup(group + 1);
-              setSelected(offset + 5);
-              setNotice("");
-            }}
-          >
-            +{connections.length - offset - count} connections
-          </Button>
-        )}
       </div>
-      <Button
-        size="sm"
-        variant="secondary"
-        className="flow-reset absolute! right-2 bottom-2"
-        onPress={() => setPan({ x: 0, y: 0 })}
-      >
-        Recenter
-      </Button>
+      <div className="flow-reset absolute! right-2 bottom-2 flex gap-1">
+        <Button
+          size="sm"
+          variant="secondary"
+          isIconOnly
+          aria-label="Zoom out"
+          onPress={() => zoomBy(1 / 1.25)}
+        >
+          −
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          isIconOnly
+          aria-label="Zoom in"
+          onPress={() => zoomBy(1.25)}
+        >
+          +
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          onPress={() => {
+            setPan({ x: 0, y: 0 });
+            setZoom(undefined);
+          }}
+        >
+          Fit
+        </Button>
+      </div>
     </div>
   );
   if (illustrative)
@@ -1144,7 +1178,8 @@ export function Flow({
       {network}
       <p className="text-sm text-muted" id={helpId}>
         <span className="flow-pointer-help [@media(any-pointer:coarse)]:hidden">
-          Drag or use the arrow keys to move the graph.{" "}
+          Drag or use the arrow keys to move the graph, and Ctrl + scroll or the
+          + and − buttons to zoom.{" "}
         </span>
         <span className="flow-touch-help hidden [@media(any-pointer:coarse)]:inline">
           Use Drag graph to move around the canvas.{" "}
@@ -1190,34 +1225,32 @@ export function Flow({
           Back to {visited[visited.length - 2]}
         </Button>
       )}
-      {group > 0 && (
-        <Button
-          size="sm"
-          variant="ghost"
-          isDisabled={loading}
-          onPress={() => {
-            setGroup(0);
-            setSelected(0);
-            setNotice("");
-            setPan({ x: 0, y: 0 });
-          }}
-        >
-          Back to first connections
-        </Button>
-      )}
-      <p
-        className="flow-provider my-3 rounded-lg bg-surface p-4"
+
+      <section
+        className="flow-provider my-4 rounded-2xl border border-separator p-4 sm:p-5"
         aria-live="polite"
       >
-        <strong>{provider?.name ?? active.label}.</strong>{" "}
-        <span className="font-semibold">
-          {flowEvidenceLabels[flowEvidence(active)]}.
-        </span>{" "}
-        {provider && provider.description + " "}
-        {relatedService &&
-          "The site and destination belong to the same documented service ecosystem. "}
-        {active.explanation}
-      </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="m-0 text-base font-semibold wrap-anywhere">
+            {provider?.name ?? active.label}
+          </h4>
+          <span
+            className="rounded-full bg-default px-2.5 py-0.5 text-xs font-medium"
+            data-evidence={flowEvidence(active)}
+          >
+            {flowEvidenceLabels[flowEvidence(active)]}
+          </span>
+        </div>
+        {provider?.name && provider.name !== active.label && (
+          <p className="mt-0.5 mb-0 text-xs text-muted">{active.label}</p>
+        )}
+        <p className="mt-3 mb-0 text-sm leading-relaxed">
+          {provider && provider.description + " "}
+          {relatedService &&
+            "The site and destination belong to the same documented service ecosystem. "}
+          {active.explanation}
+        </p>
+      </section>
       {provider && (
         <p>
           <a className="inline-link" href={provider.source} rel="noreferrer">
@@ -1305,6 +1338,7 @@ export function Flow({
                 return;
               }
               setGroup(0);
+              setZoom(undefined);
               setLeafReferences(undefined);
               setSelected(0);
               setPan({ x: 0, y: 0 });
