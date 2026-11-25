@@ -26,7 +26,11 @@ import {
 import { isPolicyDocument } from "../../../lib/report-documents";
 import { ContextFindings } from "./context-findings";
 import { CompanyFindings } from "./company-findings";
-import { companyFindings } from "../../../lib/company-findings";
+import {
+  companyFindings,
+  recipientServices,
+  type RecipientService,
+} from "../../../lib/company-findings";
 import { HistoryComparison, type ScanComparison } from "./history-comparison";
 import type { PracticeTakeaway } from "../../../lib/practice-takeaways";
 import { ReportContentPages } from "./report-content-pages";
@@ -759,12 +763,26 @@ type FlowDestination = {
   visits?: DestinationVisit[];
   declared?: boolean;
   relatedSources?: { href: string; label: string }[];
+  service?: RecipientService;
 };
 
 function flowEvidence(destination: FlowDestination) {
   if (destination.declared && destination.observed) return "both";
   return destination.declared ? "policy" : "observed";
 }
+
+const servicePurposeLabels = {
+  advertising: "Advertising",
+  analytics: "Analytics",
+  needed: "Needed for the site",
+  unknown: "Unidentified",
+} as const;
+const servicePurposeTone = {
+  advertising: "bg-danger/12 text-danger",
+  analytics: "bg-warning/15 text-warning",
+  needed: "bg-success/12 text-success",
+  unknown: "bg-default text-muted",
+} as const;
 
 const flowEvidenceLabels = {
   observed: "Browser observation",
@@ -873,6 +891,65 @@ function jobStateLabel(state: string) {
   return "In progress";
 }
 
+const domainLike = /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i;
+
+/** Favicon through our own endpoint, so the visitor never contacts the host. */
+function SiteIcon({
+  host,
+  src,
+  fallback = "globe",
+  className,
+  size = 22,
+}: {
+  host: string;
+  src?: string;
+  fallback?: "globe" | "policy";
+  className?: string;
+  size?: number;
+}) {
+  const name = host.toLowerCase().replace(/^www\./, "");
+  const url =
+    src ??
+    bundledSiteFavicon(name) ??
+    (domainLike.test(name)
+      ? "/api/v1/domains/" + encodeURIComponent(name) + "/favicon"
+      : undefined);
+  const [failed, setFailed] = useState<string>();
+  if (url && failed !== url)
+    return (
+      <img
+        src={url}
+        alt=""
+        width={size}
+        height={size}
+        loading="lazy"
+        className={className ?? "size-[45%] rounded-sm object-contain"}
+        onError={() => setFailed(url)}
+      />
+    );
+  return (
+    <svg
+      aria-hidden="true"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
+      {fallback === "policy" ? (
+        <path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h6" />
+      ) : (
+        <>
+          <circle cx="12" cy="12" r="9" />
+          <ellipse cx="12" cy="12" rx="4" ry="9" />
+          <path d="M3 12h18" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 export function Flow({
   host,
   recipients,
@@ -945,9 +1022,11 @@ export function Flow({
   const points = rings.flatMap((take, k) => {
     const radius = rings.length === 1 ? 32 : 26 + 20 * k;
     return Array.from({ length: take }, (_, index) => {
+      // A different phase per ring keeps every spoke on its own angle, so no
+      // line to an outer node runs underneath an inner one.
       const angle =
         (take <= 2 ? -Math.PI / 4 : -Math.PI / 2) +
-        (k % 2) * (Math.PI / take) +
+        ((k * 0.381966) % 1) * ((2 * Math.PI) / take) +
         (2 * Math.PI * index) / take;
       return {
         // Match CSS percentage precision across the server and browser engines.
@@ -957,7 +1036,7 @@ export function Flow({
     });
   });
   // Start zoomed out just enough for the outer ring to fit.
-  const fitZoom = Math.max(0.75, Math.min(1, 44 / Math.max(outer, 1)));
+  const fitZoom = Math.max(0.55, Math.min(1, 40 / Math.max(outer, 1)));
   const scale = zoom ?? fitZoom;
   function moveGraph(target: HTMLElement, x: number, y: number) {
     const bound = (value: number, limit: number) =>
@@ -971,7 +1050,7 @@ export function Flow({
     setZoom(Math.min(2.5, Math.max(0.35, scale * factor)));
   const network = (
     <div
-      className="flow-network relative h-[clamp(26rem,60vw,40rem)] cursor-grab touch-pan-y overflow-hidden select-none focus-visible:outline-2 focus-visible:-outline-offset-2 active:cursor-grabbing data-touch-pan:touch-none"
+      className="flow-network relative h-[clamp(26rem,60vw,40rem)] cursor-grab touch-pan-y overflow-hidden rounded-2xl border border-separator bg-surface-secondary bg-[radial-gradient(circle,color-mix(in_oklab,var(--muted)_28%,transparent)_1px,transparent_1.5px)] bg-size-[22px_22px] select-none focus-visible:outline-2 focus-visible:-outline-offset-2 active:cursor-grabbing data-touch-pan:touch-none"
       role="group"
       aria-label="Website connection network"
       aria-describedby={helpId}
@@ -1081,35 +1160,17 @@ export function Flow({
         </svg>
         {/* Same shape as the recipients: icon in the bubble, name below it. */}
         <strong className="flow-root absolute top-1/2 left-1/2 grid size-[clamp(3.2rem,8vw,4.75rem)] -translate-1/2 place-items-center rounded-full border-2 border-accent bg-surface">
-          {currentFavicon ? (
-            <img
-              src={currentFavicon}
-              alt=""
-              width={28}
-              height={28}
-              className="size-[55%] object-contain"
-            />
-          ) : (
-            <svg
-              aria-hidden="true"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-            >
-              <circle cx="12" cy="12" r="9" />
-              <ellipse cx="12" cy="12" rx="4" ry="9" />
-              <path d="M3 12h18" />
-            </svg>
-          )}
+          <SiteIcon
+            host={currentHost}
+            src={currentFavicon}
+            className="size-[55%] object-contain"
+            size={28}
+          />
           <span className="flow-root-label pointer-events-none absolute top-full left-1/2 mt-1.5 w-max max-w-[14rem] -translate-x-1/2 truncate text-sm font-semibold">
             {currentHost}
           </span>
         </strong>
         {visible.map((item, index) => {
-          const icon = bundledSiteFavicon(item.label.toLowerCase());
           return (
             <Button
               key={item.label}
@@ -1129,29 +1190,10 @@ export function Flow({
                 setSelected(index);
               }}
             >
-              {icon ? (
-                <img src={icon} alt="" width={24} height={24} />
-              ) : (
-                <svg
-                  aria-hidden="true"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                >
-                  {item.declared ? (
-                    <path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h6" />
-                  ) : (
-                    <>
-                      <circle cx="12" cy="12" r="9" />
-                      <ellipse cx="12" cy="12" rx="4" ry="9" />
-                      <path d="M3 12h18" />
-                    </>
-                  )}
-                </svg>
-              )}
+              <SiteIcon
+                host={item.label}
+                fallback={item.declared && !item.observed ? "policy" : "globe"}
+              />
               <span
                 className="flow-label pointer-events-none absolute top-full left-1/2 mt-1.5 w-max max-w-[min(31vw,13rem)] -translate-x-1/2 truncate text-xs leading-tight text-foreground"
                 aria-hidden="true"
@@ -1184,12 +1226,26 @@ export function Flow({
         <Button
           size="sm"
           variant="secondary"
+          isIconOnly
+          aria-label="Fit to view"
           onPress={() => {
             setPan({ x: 0, y: 0 });
             setZoom(undefined);
           }}
         >
-          Fit
+          <svg
+            aria-hidden="true"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" />
+          </svg>
         </Button>
       </div>
     </div>
@@ -1270,22 +1326,40 @@ export function Flow({
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h4 className="m-0 text-base font-semibold wrap-anywhere">
-            {provider?.name ?? active.label}
+            {provider?.name ?? active.service?.vendor ?? active.label}
           </h4>
-          <span
-            className="rounded-full bg-default px-2.5 py-0.5 text-xs font-medium"
-            data-evidence={flowEvidence(active)}
-          >
-            {flowEvidenceLabels[flowEvidence(active)]}
+          <span className="flex flex-wrap gap-1.5">
+            {active.service && (
+              <span
+                className={
+                  "rounded-full px-2.5 py-0.5 text-xs font-medium " +
+                  servicePurposeTone[active.service.purpose]
+                }
+              >
+                {servicePurposeLabels[active.service.purpose]}
+              </span>
+            )}
+            <span
+              className="rounded-full bg-default px-2.5 py-0.5 text-xs font-medium"
+              data-evidence={flowEvidence(active)}
+            >
+              {flowEvidenceLabels[flowEvidence(active)]}
+            </span>
           </span>
         </div>
-        {provider?.name && provider.name !== active.label && (
+        {(provider?.name ?? active.service?.vendor ?? active.label) !==
+          active.label && (
           <p className="mt-0.5 mb-0 text-xs text-muted">{active.label}</p>
         )}
         <p className="mt-3 mb-0 text-sm leading-relaxed">
-          {provider && provider.description + " "}
+          {provider
+            ? provider.description + " "
+            : active.service
+              ? active.service.reason + " "
+              : !active.explanation &&
+                "We couldn't identify what this service does. "}
           {relatedService &&
-            "The site and destination belong to the same documented service ecosystem. "}
+            "The site and destination belong to the same company. "}
           {active.explanation}
         </p>
       </section>
@@ -1713,15 +1787,15 @@ export function ReportContent({
       visitLabels[source.consentScenario!] + " · " + landed.pathname,
     );
   }
+  const services = recipientServices(report?.storageInventory);
   const flowDestinations: FlowDestination[] = [...attemptedDestinations].map(
     ([label, visits]) => ({
       label,
       evidenceIds: visits.map(({ evidenceId }) => evidenceId),
       visits,
       observed: true,
-      explanation: visits.some(({ responded }) => responded)
-        ? "The browser connected to this domain."
-        : "The browser tried to connect to this domain.",
+      explanation: "",
+      service: services.get(label.replace(/^www\./, "")),
     }),
   );
   for (const source of report?.evidence ?? []) {

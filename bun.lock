@@ -40,6 +40,7 @@
         "@datadeal/config": "workspace:*",
         "@datadeal/contracts": "workspace:*",
         "@datadeal/database": "workspace:*",
+        "@datadeal/scanner": "workspace:*",
         "@datadeal/scoring": "workspace:*",
         "@datadeal/ui": "workspace:*",
         "@heroui-pro/react": "1.0.0-beta.11",

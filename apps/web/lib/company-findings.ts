@@ -164,3 +164,29 @@ export function companyFindings(
       a.name.localeCompare(b.name),
   );
 }
+
+export type RecipientService = {
+  vendor: string | null;
+  purpose: CompanyPurpose;
+  reason: string;
+};
+
+/** What each contacted site is, by registrable domain, from the inventory. */
+export function recipientServices(inventory: StorageInventory | undefined) {
+  const services = new Map<string, RecipientService>();
+  if (!inventory) return services;
+  const byId = new Map(inventory.classifications.map((c) => [c.itemId, c]));
+  for (const item of inventory.recipients) {
+    const c = byId.get(item.id);
+    if (!c) continue;
+    const key = site(item.domain);
+    const purpose = purposeGroup[c.purpose];
+    const existing = services.get(key);
+    if (
+      !existing ||
+      purposeRank.indexOf(purpose) < purposeRank.indexOf(existing.purpose)
+    )
+      services.set(key, { vendor: c.vendor, purpose, reason: c.reason });
+  }
+  return services;
+}
