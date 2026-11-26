@@ -18,6 +18,7 @@ import {
   proPlansPath,
   type CheckoutReturnQuery,
 } from "../../../lib/checkout-return";
+import { LocalDate } from "../../../lib/local-date";
 
 export async function BillingView({
   query,
@@ -127,12 +128,6 @@ export async function BillingView({
       : billing.product_id === checkout.monthly
         ? "Monthly Pro"
         : null);
-  const accessThrough =
-    billing &&
-    new Intl.DateTimeFormat("en", {
-      dateStyle: "long",
-      timeZone: "UTC",
-    }).format(billing.access_until);
   return (
     <AccountScreen
       title="DataDeal Pro"
@@ -177,19 +172,25 @@ export async function BillingView({
           {billing?.has_access ? (
             billing.status === "canceled" ? (
               <p>
-                Pro is active until{" "}
-                {billing.access_until.toISOString().slice(0, 10)} UTC. Your
-                subscription will not renew.
+                Pro is active until <LocalDate value={billing.access_until} />.
+                Your subscription will not renew.
               </p>
             ) : billing.status === "past_due" ? (
               <p>
                 Payment is past due. Pro access continues until{" "}
-                {billing.access_until.toISOString().slice(0, 10)} UTC.
+                <LocalDate value={billing.access_until} />.
               </p>
             ) : (
               <p>
-                Pro is active through {accessThrough}. Your reports are ad-free
-                and include the advanced analysis wherever available.
+                Pro is active through{" "}
+                {billing && (
+                  <LocalDate
+                    value={billing.access_until}
+                    options={{ dateStyle: "long" }}
+                  />
+                )}
+                . Your reports are ad-free and include the advanced analysis
+                wherever available.
               </p>
             )
           ) : billing?.needs_management ? (

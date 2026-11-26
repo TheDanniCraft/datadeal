@@ -16,6 +16,7 @@ import {
 } from "react";
 import type { ScanReport } from "@datadeal/contracts";
 import { contentPageEvidenceTitle } from "../../../lib/content-pages";
+import { LocalDate } from "../../../lib/local-date";
 
 type Evidence = ScanReport["evidence"][number];
 
@@ -521,11 +522,10 @@ export function ReportCitations({
                       dateTime={source.retrievedAt}
                     >
                       Retrieved{" "}
-                      {new Intl.DateTimeFormat("en", {
-                        dateStyle: "medium",
-                        timeZone: "UTC",
-                      }).format(new Date(source.retrievedAt))}{" "}
-                      UTC
+                      <LocalDate
+                        value={source.retrievedAt}
+                        options={{ dateStyle: "medium" }}
+                      />
                     </time>
                   </div>
                 </Modal.Body>

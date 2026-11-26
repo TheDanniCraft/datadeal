@@ -5,6 +5,7 @@ import { AccountScreen, AccountLink, AccountEmpty } from "../account-ui";
 import { auth } from "../../../lib/auth";
 import { database } from "../../../lib/reports";
 import { AlertPreference } from "./alert-preference";
+import { LocalDate } from "../../../lib/local-date";
 
 export const dynamic = "force-dynamic";
 
@@ -81,7 +82,7 @@ export default async function AlertsPage() {
                         </>
                       )}
                       <time dateTime={item.created_at.toISOString()}>
-                        {item.created_at.toISOString().slice(0, 10)} UTC
+                        <LocalDate value={item.created_at} />
                       </time>
                     </p>
                   </li>

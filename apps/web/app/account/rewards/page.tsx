@@ -7,6 +7,7 @@ import { database } from "../../../lib/reports";
 import { AccountScreen } from "../account-ui";
 import { RefreshWithPoints } from "./refresh-with-points";
 import { pointOperations as operations } from "./operations";
+import { LocalDate } from "../../../lib/local-date";
 export default async function RewardsWallet() {
   if (!localPointsEnabled() || !database) notFound();
   const session = await auth?.api.getSession({ headers: await headers() });
@@ -62,7 +63,7 @@ export default async function RewardsWallet() {
                 <span>
                   {operations[entry.operation] ?? "Report points"}{" "}
                   <small className="text-muted">
-                    {new Date(entry.created_at).toISOString().slice(0, 10)}
+                    <LocalDate value={entry.created_at} />
                   </small>
                 </span>
                 <strong className="tabular-nums">

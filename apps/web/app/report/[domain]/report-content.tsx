@@ -21,6 +21,7 @@ import { ConsentTable } from "./consent-table";
 import { ScanProgress } from "./scan-progress";
 import { ProviderDisclosure } from "../../data-flow/provider-lookup";
 import { RewardedAdTest } from "./rewarded-ad-test";
+import { LocalDate, useTimeZone } from "../../../lib/local-date";
 import { useClientReady } from "../../use-client-ready";
 import type { publicPolicyHighlights } from "../../../lib/policy-highlights";
 import { publicReportEvidence } from "../../../lib/public-report-evidence";
@@ -626,10 +627,10 @@ function RatingCalculation({
               {correctedRating && (
                 <p>
                   Rating corrected on{" "}
-                  {new Date(correctedRating.date).toLocaleDateString("en", {
-                    dateStyle: "medium",
-                    timeZone: "UTC",
-                  })}
+                  <LocalDate
+                    value={correctedRating.date}
+                    options={{ dateStyle: "medium" }}
+                  />
                   . Previously {correctedRating.previous ?? "unrated"}.{" "}
                   {correctedRating.reason}
                 </p>
@@ -1857,16 +1858,17 @@ function ScoreHistoryChart({
 }: {
   data: { date: string; score: number | null }[];
 }) {
+  const timeZone = useTimeZone();
   if (data.filter(({ score }) => score !== null).length < 2) return null;
   const shortDate = new Intl.DateTimeFormat("en", {
     month: "short",
     day: "numeric",
-    timeZone: "UTC",
+    timeZone,
   });
   const fullDate = new Intl.DateTimeFormat("en", {
     dateStyle: "medium",
     timeStyle: "short",
-    timeZone: "UTC",
+    timeZone,
   });
   const chartData = data.map(({ date, score }) => {
     const point: Record<string, number> = { date: Date.parse(date) };
@@ -1909,7 +1911,7 @@ function ScoreHistoryChart({
         <LineChart.Tooltip
           content={<LineChart.TooltipContent />}
           labelFormatter={(date) =>
-            typeof date === "number" ? fullDate.format(date) + " UTC" : date
+            typeof date === "number" ? fullDate.format(date) : date
           }
         />
       </LineChart>
@@ -2962,14 +2964,9 @@ export function ReportContent({
                       ? "Selected scan"
                       : "Scanned"}{" "}
                 </span>
-                {new Intl.DateTimeFormat("en", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                  timeZone: "UTC",
-                }).format(
-                  new Date(policyOnly ? policyReviewedAt! : report.completedAt),
-                )}
+                <LocalDate
+                  value={policyOnly ? policyReviewedAt! : report.completedAt}
+                />
               </time>
             )}
             {report.collectedBy === "visitor_browser" && (

@@ -19,6 +19,7 @@ import {
   checkoutReference,
   type CheckoutReturnQuery,
 } from "../../../lib/checkout-return";
+import { LocalDate } from "../../../lib/local-date";
 
 export const dynamic = "force-dynamic";
 
@@ -215,8 +216,7 @@ export default async function DeveloperAccountPage({
                       <p>
                         {entry.domain && entry.domain + " · "}
                         <time dateTime={entry.createdAt}>
-                          {new Date(entry.createdAt).toISOString().slice(0, 10)}{" "}
-                          UTC
+                          <LocalDate value={entry.createdAt} />
                         </time>
                       </p>
                       <AccountDetails label="Transaction details">

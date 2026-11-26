@@ -11,6 +11,7 @@ import {
 } from "@datadeal/contracts";
 import type { comparePublicReports } from "../../../lib/compare";
 import { ReportIcon } from "./report-icon";
+import { LocalDate } from "../../../lib/local-date";
 
 type Pair = Awaited<ReturnType<typeof comparePublicReports>>;
 
@@ -193,8 +194,9 @@ export function ReportCompare({ host }: { host: string }) {
                         </p>
                         {r.scanDate && (
                           <small>
-                            Scanned {r.scanDate.slice(0, 10)} · {r.confidence}{" "}
-                            confidence{r.partial && " · Partial scan"}
+                            Scanned <LocalDate value={r.scanDate} /> ·{" "}
+                            {r.confidence} confidence
+                            {r.partial && " · Partial scan"}
                           </small>
                         )}
                         {r.visitorClaim && (

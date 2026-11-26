@@ -4,6 +4,7 @@ import { Button, Form, Input, Label } from "@heroui/react";
 import type { ApiTokenRecord } from "@datadeal/database";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { LocalDate } from "../../../lib/local-date";
 
 export function ApiTokens({
   records,
@@ -121,11 +122,13 @@ export function ApiTokens({
               <li key={item.id}>
                 <strong>{item.label}</strong> · {item.scope}
                 <p className="text-sm text-muted">
-                  Created {item.createdAt.toISOString().slice(0, 10)} UTC
-                  {item.lastUsedAt &&
-                    " · Last used " +
-                      item.lastUsedAt.toISOString().slice(0, 10) +
-                      " UTC"}
+                  Created <LocalDate value={item.createdAt} />
+                  {item.lastUsedAt && (
+                    <>
+                      {" "}
+                      · Last used <LocalDate value={item.lastUsedAt} />
+                    </>
+                  )}
                 </p>
                 {item.revokedAt ? (
                   <p>Revoked</p>

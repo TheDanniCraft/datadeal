@@ -6,12 +6,7 @@ import { RecentReportList } from "../recent-report-list";
 import { AccountEmpty, AccountIcon } from "./account-ui";
 import type { AccountSymbol } from "./account-icon";
 import { pointOperations } from "./rewards/operations";
-
-const dateFormat = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
+import { LocalDate } from "../../lib/local-date";
 
 function Tile({
   href,
@@ -24,7 +19,7 @@ function Tile({
   icon: AccountSymbol;
   label: string;
   value: string;
-  note: string;
+  note: ReactNode;
 }) {
   return (
     <Link
@@ -95,10 +90,14 @@ export async function AccountOverview({
           label="Plan"
           value={pro ? "Pro" : "Free"}
           note={
-            pro && billing
-              ? (billing.status === "canceled" ? "Ends " : "Renews ") +
-                dateFormat.format(billing.access_until)
-              : "See what Pro adds"
+            pro && billing ? (
+              <>
+                {billing.status === "canceled" ? "Ends " : "Renews "}
+                <LocalDate value={billing.access_until} />
+              </>
+            ) : (
+              "See what Pro adds"
+            )
           }
         />
         {wallet && (
