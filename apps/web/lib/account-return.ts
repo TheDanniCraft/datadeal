@@ -25,6 +25,11 @@ export function accountReturnPath(value: unknown) {
     value === "/data-flow"
   )
     return value;
+  // Back to a report after signing in (e.g. to send a browser scan).
+  if (typeof value === "string" && value.startsWith("/report/")) {
+    const site = domain.safeParse(value.slice("/report/".length));
+    if (site.success) return "/report/" + site.data;
+  }
   const prefix = "/data-flow?provider=";
   if (typeof value === "string" && value.startsWith(prefix)) {
     const provider = domain.safeParse(value.slice(prefix.length));

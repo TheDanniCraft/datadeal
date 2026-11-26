@@ -238,8 +238,7 @@ function classify(
   if (method === "POST" || method === "PUT" || method === "PATCH") {
     remaining = fieldBudget;
     const headers = request.headers();
-    const media = (headers["content-type"] ?? "")
-      .split(";", 1)[0]
+    const media = ((headers["content-type"] ?? "").split(";", 1)[0] ?? "")
       .trim()
       .toLowerCase();
     const json = media === "application/json" || media.endsWith("+json");

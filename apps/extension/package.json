@@ -10,7 +10,9 @@
     "typecheck": "wxt prepare && tsc"
   },
   "dependencies": {
+    "@datadeal/collector": "workspace:*",
     "@datadeal/contracts": "workspace:*",
+    "@datadeal/scanner": "workspace:*",
     "@heroui/react": "^3",
     "@heroui/styles": "^3",
     "@tailwindcss/postcss": "^4",

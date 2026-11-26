@@ -1,0 +1,16 @@
+@import "tailwindcss" source(none);
+@import "@heroui/styles";
+@import "../../../../packages/ui/mouve.css";
+@source "./";
+
+@font-face {
+  font-family: Inter;
+  src: url("../../../web/app/fonts/Inter.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100 900;
+}
+body {
+  font-family: Inter, system-ui, sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+}

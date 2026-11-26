@@ -9,7 +9,9 @@
   },
   "exports": {
     ".": "./index.ts",
-    "./favicon": "./favicon.ts"
+    "./favicon": "./favicon.ts",
+    "./browser-storage": "./browser-storage.ts",
+    "./access-interstitial": "./access-interstitial.ts"
   },
   "private": true,
   "scripts": {

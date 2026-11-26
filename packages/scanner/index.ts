@@ -71,7 +71,9 @@ const capturedPages = new AsyncLocalStorage<Map<string, CapturedPage>>();
 const pageKey = (href: string) => {
   const url = new URL(href);
   const host = url.hostname.replace(/^www\./, "");
-  return host + (url.pathname.replace(/\/+$/, "") || "/") + url.search;
+  // Query strings are ignored: a challenge or tracking parameter must not
+  // stop the captured homepage from matching.
+  return host + (url.pathname.replace(/\/+$/, "") || "/");
 };
 
 /** Runs a scan against pages captured in a visitor's browser. */

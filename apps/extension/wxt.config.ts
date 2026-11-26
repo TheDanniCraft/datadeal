@@ -4,8 +4,11 @@ import { dirname, resolve } from "node:path";
 import { defineConfig, type ConfigEnv } from "wxt";
 import { createReviewerWorkspace, sourcePatterns } from "./reviewer-source";
 
+// `wxt dev`, or a build with WXT_DATADEAL_LOCAL=true, talks to the local site.
+const local = (command: ConfigEnv["command"]) =>
+  command === "serve" || process.env.WXT_DATADEAL_LOCAL === "true";
 const reportOrigin = (command: ConfigEnv["command"]) =>
-  command === "serve" ? "http://localhost:3000" : "https://datadeal.app";
+  local(command) ? "http://localhost:3000" : "https://datadeal.app";
 
 function packageManifest(name: string, from: string) {
   const path = findPackageJSON(name, from);
@@ -77,9 +80,16 @@ export default defineConfig({
     name: "DataDeal",
     description: "Look up a privacy report for the active website.",
     permissions: ["activeTab", "scripting", "storage"],
+    // Browser scans run in a private window, driven from the normal one.
+    incognito: "spanning",
     ...(browser === "firefox"
       ? {
-          optional_permissions: ["https://*/*"],
+          optional_permissions: [
+            "https://*/*",
+            "http://*/*",
+            "webRequest",
+            "cookies",
+          ],
           browser_specific_settings: {
             gecko: {
               id: "extension@datadeal.app",
@@ -88,9 +98,24 @@ export default defineConfig({
             },
           },
         }
-      : { optional_host_permissions: ["https://*/*"] }),
+      : {
+          optional_permissions: ["webRequest", "cookies"],
+          optional_host_permissions: ["https://*/*", "http://*/*"],
+        }),
     host_permissions: [
-      command === "serve" ? "http://localhost/*" : "https://datadeal.app/*",
+      local(command) ? "http://localhost/*" : "https://datadeal.app/*",
+      // Local builds grant the browser-scan permissions at install, so the
+      // flow can be tested without the browser's permission prompt.
+      ...(local(command) ? ["https://*/*", "http://*/*"] : []),
     ],
+    ...(local(command) && {
+      permissions: [
+        "activeTab",
+        "scripting",
+        "storage",
+        "webRequest",
+        "cookies",
+      ],
+    }),
   }),
 });

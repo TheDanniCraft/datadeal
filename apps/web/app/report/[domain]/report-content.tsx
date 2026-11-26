@@ -6,6 +6,7 @@ import type { ProFeature } from "../../../lib/pro-features";
 import { ReportIcon } from "./report-icon";
 import { combineCosts, reportSignals } from "@datadeal/scoring";
 import { ReportSignalIcons } from "./report-signals";
+import { BrowserScan } from "./browser-scan";
 import { pageName } from "../../../lib/content-pages";
 import { ReportCompare } from "./report-compare";
 import {
@@ -1933,6 +1934,7 @@ export function ReportContent({
   current,
   blocked = false,
   queuePosition,
+  browserScan,
   activeStages,
   previousRewardedScan,
   scanAvailable,
@@ -1972,6 +1974,12 @@ export function ReportContent({
   blocked?: boolean;
   /** 1 = next to start, while the scan waits. */
   queuePosition?: number;
+  /** Set when the site blocks the scanner: run it in a visitor's browser. */
+  browserScan?: {
+    signedIn: boolean;
+    pendingUploads: number;
+    extensionUrl?: string;
+  };
   activeStages?: readonly ScanStage[];
   previousRewardedScan?: string;
   scanAvailable: boolean;
@@ -2889,34 +2897,44 @@ export function ReportContent({
       </div>
       {report && (
         <div className="report-scan-meta mb-5 flex items-center justify-between gap-x-2 border-y border-separator py-1.5 text-sm text-muted max-sm:[&_.button]:px-2">
-          {policyOnly && !policyReviewedAt ? (
-            <span>Policy reviewed</span>
-          ) : (
-            <time
-              className="min-w-0 truncate"
-              dateTime={policyOnly ? policyReviewedAt : report.completedAt}
-            >
-              <span className="max-sm:sr-only">
-                {policyOnly
-                  ? "Policy reviewed"
-                  : archived
-                    ? "Selected scan"
-                    : "Scanned"}{" "}
-              </span>
-              {new Intl.DateTimeFormat("en", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-                timeZone: "UTC",
-              }).format(
-                new Date(policyOnly ? policyReviewedAt! : report.completedAt),
-              )}
-            </time>
-          )}
+          <span className="flex min-w-0 items-center gap-1.5">
+            {policyOnly && !policyReviewedAt ? (
+              <span>Policy reviewed</span>
+            ) : (
+              <time
+                className="min-w-0 truncate"
+                dateTime={policyOnly ? policyReviewedAt : report.completedAt}
+              >
+                <span className="max-sm:sr-only">
+                  {policyOnly
+                    ? "Policy reviewed"
+                    : archived
+                      ? "Selected scan"
+                      : "Scanned"}{" "}
+                </span>
+                {new Intl.DateTimeFormat("en", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  timeZone: "UTC",
+                }).format(
+                  new Date(policyOnly ? policyReviewedAt! : report.completedAt),
+                )}
+              </time>
+            )}
+            {report.collectedBy === "visitor_browser" && (
+              <span className="truncate">· in a visitor&apos;s browser</span>
+            )}
+          </span>
           <div className="flex shrink-0 items-center gap-0.5">
             {hasUsableReport && (archived || scanAvailable) && scanAction}
             {!archived && <ReportCompare host={host} />}
           </div>
+        </div>
+      )}
+      {blocked && browserScan && (
+        <div className="mb-6">
+          <BrowserScan host={host} {...browserScan} />
         </div>
       )}
       {scanActive && currentState && (

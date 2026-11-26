@@ -216,9 +216,12 @@ export function inspectWebStorage({
       stores.push({ total, inspected, categories: [...categories].sort() });
       samples.push(rows);
     }
+    const [local, session] = stores;
+    const [localSamples, sessionSamples] = samples;
+    if (!local || !session || !localSamples || !sessionSamples) return;
     return {
-      summary: { local: stores[0], session: stores[1] },
-      samples: { local: samples[0], session: samples[1] },
+      summary: { local, session },
+      samples: { local: localSamples, session: sessionSamples },
     };
   } catch {
     return;

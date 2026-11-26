@@ -333,6 +333,7 @@ export default async function ReportPage({
       ? configuredAdUnit
       : undefined;
   const current = history[0]?.state;
+  const blockedScan = current === "failed" && history[0]?.failure === "blocked";
   const queuePosition =
     !scan && (current === "queued" || current === "requested")
       ? await database?.queuePosition(history[0].id)
@@ -450,8 +451,19 @@ export default async function ReportPage({
         current={
           scan === undefined || report?.id === latest?.id ? current : undefined
         }
-        blocked={current === "failed" && history[0]?.failure === "blocked"}
+        blocked={blockedScan}
         queuePosition={queuePosition ?? undefined}
+        browserScan={
+          blockedScan
+            ? {
+                signedIn: Boolean(session),
+                pendingUploads:
+                  (await database?.browserScanStatus(host))?.pendingUploads ??
+                  0,
+                extensionUrl: process.env.DATADEAL_EXTENSION_URL,
+              }
+            : undefined
+        }
         scanAvailable={Boolean(database)}
         previousRewardedScan={previousRewardedScan}
         limitedAdUnit={!pro && !report?.demo ? limitedDisplayUnit() : undefined}

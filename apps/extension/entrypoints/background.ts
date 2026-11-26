@@ -2,7 +2,7 @@ import { browser } from "wxt/browser";
 import { defineBackground } from "wxt/utils/define-background";
 import { exactReminderSites, reminderSite } from "../lib/reminder-site";
 import { getDomain } from "tldts";
-import { domainLookup } from "@datadeal/contracts";
+import { domainLookup, siteDomain } from "@datadeal/contracts";
 import { gradeColors, publishedRating, type Rating } from "../lib/popup-rating";
 
 declare const DATADEAL_REPORT_ORIGIN: string;
@@ -28,6 +28,31 @@ async function clearOpenReminders(revoked: string[]) {
 }
 
 export default defineBackground(() => {
+  // DataDeal's report page asks for a browser scan through the bridge
+  // content script; the scan runs on an extension page so it can request
+  // permissions and open a private window.
+  browser.runtime.onMessage.addListener((message: unknown, sender) => {
+    const data = message as { type?: string; domain?: unknown };
+    if (data?.type !== "datadeal-open-browser-scan") return;
+    const domain = siteDomain.safeParse(data.domain);
+    const tabId = sender.tab?.id;
+    if (
+      !domain.success ||
+      tabId === undefined ||
+      !sender.url ||
+      new URL(sender.url).origin !== new URL(DATADEAL_REPORT_ORIGIN).origin
+    )
+      return;
+    void browser.tabs.create({
+      url:
+        browser.runtime.getURL("/scan.html") +
+        "?domain=" +
+        encodeURIComponent(domain.data) +
+        "&tab=" +
+        tabId,
+      index: (sender.tab?.index ?? 0) + 1,
+    });
+  });
   const action = browser.action ?? browser.browserAction;
   const activeUpdates = new Map<number, symbol>();
   const popupResults = new Map<
