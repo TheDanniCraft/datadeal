@@ -1,9 +1,11 @@
 export const flightCap = 500;
 export const guaranteedPoints = 50;
-export const defaultReportPointCost = 50;
-export const defaultRefreshPointCost = 50;
-// Surviving flights pause here once so the player can bank or fly on. 50
-// is exactly one report unlock (the reference recording paused at 36).
+// A flight is worth about 125 points on average (collect near 250, keep it
+// half the time), so one flight buys a bit less than one report.
+export const defaultReportPointCost = 150;
+export const defaultRefreshPointCost = 150;
+// Surviving flights pause here once so the player can bank or fly on
+// (the reference recording paused at 36).
 export const flightCheckpoint = 50;
 const growthPerSecond = 0.59085;
 

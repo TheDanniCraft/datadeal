@@ -104,7 +104,7 @@ export async function AccountOverview({
         {wallet && (
           <Tile
             href="/account/rewards"
-            icon="rewards"
+            icon="points"
             label="Report points"
             value={String(wallet.balance)}
             note={
@@ -142,42 +142,17 @@ export async function AccountOverview({
             href="/account/rewards#fly"
             className={buttonVariants({ size: "sm", className: "gap-2" })}
           >
-            <AccountIcon name="rewards" />
+            <AccountIcon name="points" />
             Get more points
           </Link>
+          {wallet.tickets.length > 0 && (
+            <span className="self-center text-sm text-muted">
+              {wallet.tickets.length === 1
+                ? "1 free flight waiting"
+                : `${wallet.tickets.length} free flights waiting`}
+            </span>
+          )}
         </div>
-      )}
-
-      {wallet && wallet.tickets.length > 0 && (
-        <section
-          aria-label="Waiting flights"
-          className="grid gap-2 rounded-2xl border border-accent/40 bg-accent/5 p-4"
-        >
-          <p className="m-0 text-sm font-medium">
-            {wallet.tickets.length === 1
-              ? "A paper-plane flight is waiting for you"
-              : `${wallet.tickets.length} paper-plane flights are waiting for you`}
-          </p>
-          <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-sm">
-            {wallet.tickets.map((ticket) => (
-              <li key={ticket.id}>
-                <Link
-                  className="inline-link"
-                  href={
-                    (ticket.domain
-                      ? "/report/" + ticket.domain
-                      : "/account/rewards") +
-                    "?reward=" +
-                    ticket.id
-                  }
-                >
-                  {ticket.state === "choose" ? "Choose reward" : "Fly"}
-                  {ticket.domain && " · " + ticket.domain}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
       )}
 
       <div id="unlocked-reports" className="scroll-mt-24">

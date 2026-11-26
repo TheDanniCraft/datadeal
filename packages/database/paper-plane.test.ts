@@ -97,6 +97,16 @@ it.skipIf(!url)(
       expect(await db.spendOnReport(host, partial, userId, [])).toBe(
         "unavailable",
       );
+      // An unlock costs 150: earn the remaining 100 the same way.
+      for (const _ of [1, 2]) {
+        const more = (await db.createReportOffer(
+          host,
+          scanId,
+          "points",
+          actor,
+        ))!;
+        await db.reportOfferAction(more, actor, "complete", args);
+      }
       expect(
         (
           await Promise.all(

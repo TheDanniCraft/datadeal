@@ -283,9 +283,11 @@ export function paperPlaneStorage(sql: Sql) {
         const activity = await tx<
           { id: string; delta: number; operation: string; created_at: Date }[]
         >`select id,delta,operation,created_at from report_point_ledger where user_id=${userId} order by created_at desc,id limit 30`;
+        // Flights the account can still play. An unclaimed choice after an ad
+        // is not kept: closing it gives the chance up.
         const tickets = await tx<
           { id: string; domain: string | null; state: State }[]
-        >`select o.id,s.domain,o.state from report_reward_offers o left join scans s on s.id=o.scan_id where o.user_id=${userId} and o.state in('choose','ready','flying') order by o.created_at desc`;
+        >`select o.id,s.domain,o.state from report_reward_offers o left join scans s on s.id=o.scan_id where o.user_id=${userId} and o.state in('ready','flying') order by o.created_at`;
         return { balance: Number(account?.balance ?? 0), activity, tickets };
       });
     },

@@ -13,7 +13,7 @@ const sections = [
 export function AccountNavigation({ current }: { current: string }) {
   const available =
     current === "/account/rewards"
-      ? [...sections, ["Report points", "/account/rewards", "rewards"] as const]
+      ? [...sections, ["Report points", "/account/rewards", "points"] as const]
       : sections;
   const links = (
     <nav

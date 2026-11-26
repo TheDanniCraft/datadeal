@@ -12,12 +12,17 @@ export function RewardModal({
   signedIn,
   onClose,
   onReplay,
+  replayLabel,
+  standalone,
 }: {
   rewardId: string | null;
   signedIn: boolean;
   onClose: () => void;
-  /** Start another rewarded ad for a new flight. */
+  /** Start another flight: a new rewarded ad, or a free flight. */
   onReplay?: () => void;
+  replayLabel?: string;
+  /** Played on the points page, not over a report. */
+  standalone?: boolean;
 }) {
   const [reward, setReward] = useState<PaperReward | null>(null);
   const [failed, setFailed] = useState(false);
@@ -103,6 +108,8 @@ export function RewardModal({
               send={(action, target) => void send(action, target)}
               onClose={close}
               onReplay={onReplay}
+              replayLabel={replayLabel}
+              standalone={standalone}
             />
           ) : failed ? (
             <p className="m-0 p-8 text-sm text-muted">

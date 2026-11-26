@@ -178,6 +178,8 @@ export function PaperPlane({
   send,
   onClose,
   onReplay,
+  replayLabel = "Watch an ad to fly again",
+  standalone = false,
 }: {
   reward: PaperReward;
   signedIn: boolean;
@@ -185,9 +187,13 @@ export function PaperPlane({
   error: string;
   send: (action: string, target?: number | null) => void;
   onClose: () => void;
-  /** Watch another ad for a new flight after a miss. */
+  /** Another flight: a new ad, or a free flight on the points page. */
   onReplay?: () => void;
+  replayLabel?: string;
+  /** Played on the points page, not over a report. */
+  standalone?: boolean;
 }) {
+  const backLabel = reward.domain && !standalone ? "Back to report" : "Done";
   // When the checkpoint hold began, for the 10-second decision bar.
   const [holdStart, setHoldStart] = useState<number | null>(null);
   useEffect(() => {
@@ -542,7 +548,7 @@ export function PaperPlane({
                 : `The full report for ${reward.domain} is now in your account.`}
             </p>
             <Button size="lg" className="w-full" onPress={onClose}>
-              {reward.domain ? "Back to report" : "Done"}
+              {backLabel}
             </Button>
           </div>
         ) : (
@@ -681,7 +687,7 @@ export function PaperPlane({
               )}
               {(banked || missed) && onReplay && (
                 <Button size="lg" className="w-full" onPress={onReplay}>
-                  Watch an ad to fly again
+                  {replayLabel}
                 </Button>
               )}
               {(banked || missed) && (
@@ -691,10 +697,10 @@ export function PaperPlane({
                   variant={onReplay ? "secondary" : "primary"}
                   onPress={onClose}
                 >
-                  {reward.domain ? "Back to report" : "Done"}
+                  {backLabel}
                 </Button>
               )}
-              {banked && reward.domain && (
+              {banked && !standalone && (
                 <Link
                   className="inline-link text-center text-xs"
                   href="/account/rewards"

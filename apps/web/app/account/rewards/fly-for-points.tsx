@@ -13,8 +13,17 @@ import { ReportIcon } from "../../report/[domain]/report-icon";
  * Earn report points without a report: every fully watched ad gives one
  * paper-plane flight.
  */
-export function FlyForPoints() {
+export function FlyForPoints({ freeFlights }: { freeFlights: string[] }) {
   const consent = useAdvertisingConsent();
+  // Flights already earned (e.g. chosen after an ad on a report) fly free.
+  const [played, setPlayed] = useState(0);
+  const remaining = freeFlights.slice(played);
+  const flyFree = () => {
+    const next = remaining[0];
+    if (!next) return;
+    setPlayed((count) => count + 1);
+    setRewardId(next);
+  };
   const [requested, setRequested] = useState(false);
   const [saving, setSaving] = useState(false);
   const [intent, setIntent] = useState("");
@@ -85,8 +94,20 @@ export function FlyForPoints() {
           Watch a short ad, then fly the paper plane. Collect before it flies
           away for 1–{flightCap} points, or miss and get nothing.
         </p>
+        {remaining.length > 0 && (
+          <p className="m-0 text-sm font-medium text-accent">
+            {remaining.length === 1
+              ? "You have 1 free flight."
+              : `You have ${remaining.length} free flights.`}
+          </p>
+        )}
       </div>
-      {consent === "allowed" || consent === "limited" ? (
+      {remaining.length > 0 ? (
+        <Button className="min-h-11 gap-2" onPress={flyFree}>
+          <ReportIcon name="play" />
+          Fly for free
+        </Button>
+      ) : consent === "allowed" || consent === "limited" ? (
         <Button
           className="min-h-11 gap-2"
           isDisabled={busy}
@@ -121,13 +142,20 @@ export function FlyForPoints() {
       <RewardModal
         rewardId={rewardId}
         signedIn
+        standalone
         onClose={() => {
           setRewardId(null);
           window.location.reload();
         }}
+        replayLabel={
+          remaining.length > 0
+            ? `Fly again for free (${remaining.length} left)`
+            : undefined
+        }
         onReplay={() => {
           setRewardId(null);
-          void start();
+          if (remaining.length > 0) flyFree();
+          else void start();
         }}
       />
     </section>

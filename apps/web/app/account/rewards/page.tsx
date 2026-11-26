@@ -1,5 +1,4 @@
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
 import { headers } from "next/headers";
 import { auth } from "../../../lib/auth";
 import { localPointsEnabled } from "../../../lib/local-reward";
@@ -30,36 +29,8 @@ export default async function RewardsWallet() {
           </span>
         </p>
       </div>
-      <FlyForPoints />
+      <FlyForPoints freeFlights={wallet.tickets.map((ticket) => ticket.id)} />
       <RewardFromQuery signedIn />
-      {wallet.tickets.length > 0 && (
-        <section>
-          <h2 className="text-xl">Your flights and rewards</h2>
-          <ul className="divide-y divide-separator">
-            {wallet.tickets.map((ticket) => (
-              <li key={ticket.id} className="py-3">
-                <Link
-                  className="inline-link"
-                  href={
-                    (ticket.domain
-                      ? "/report/" + ticket.domain
-                      : "/account/rewards") +
-                    "?reward=" +
-                    ticket.id
-                  }
-                >
-                  {ticket.state === "ready"
-                    ? "Launch flight"
-                    : ticket.state === "choose"
-                      ? "Choose reward"
-                      : "Resume flight"}{" "}
-                  {ticket.domain && "· " + ticket.domain}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
       <RefreshWithPoints balance={wallet.balance} />
       <section>
         <h2 className="mb-2 text-xl">Recent activity</h2>
