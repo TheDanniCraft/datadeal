@@ -1112,7 +1112,10 @@ function DestinationCard({
     <div className="grid gap-2.5 text-sm">
       <div className="flex items-center gap-3">
         <span className="grid size-9 shrink-0 place-items-center rounded-full bg-default">
-          <SiteIcon host={item.label} />
+          <SiteIcon
+            host={item.label}
+            label={item.service?.vendor ?? undefined}
+          />
         </span>
         <span className="grid min-w-0">
           <strong className="truncate leading-tight">{title}</strong>
@@ -1168,12 +1171,15 @@ function SiteIcon({
   host,
   src,
   fallback = "globe",
+  label,
   className,
   size = 22,
 }: {
   host: string;
   src?: string;
   fallback?: "globe" | "policy";
+  /** Company or site name for the letter placeholder. */
+  label?: string;
   className?: string;
   size?: number;
 }) {
@@ -1210,11 +1216,22 @@ function SiteIcon({
       {fallback === "policy" ? (
         <path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6M9 16h6" />
       ) : (
-        <>
-          <circle cx="12" cy="12" r="9" />
-          <ellipse cx="12" cy="12" rx="4" ry="9" />
-          <path d="M3 12h18" />
-        </>
+        // No favicon: the first letter of the company or domain.
+        <text
+          x="12"
+          y="17.2"
+          textAnchor="middle"
+          fill="currentColor"
+          stroke="none"
+          fontSize="15"
+          fontWeight="700"
+          fontFamily="ui-sans-serif, system-ui, sans-serif"
+        >
+          {(label ?? host)
+            .replace(/^www\./i, "")
+            .match(/[\p{L}\p{N}]/u)?.[0]
+            ?.toUpperCase() ?? "?"}
+        </text>
       )}
     </svg>
   );
@@ -1240,6 +1257,37 @@ export function Flow({
   const drag = useRef<{ id: number; x: number; y: number } | null>(null);
   const [selected, setSelected] = useState(0);
   const [card, setCard] = useState<string | null>(null);
+  // A clicked or tapped node keeps its card open (touch has no hover) until
+  // the visitor taps elsewhere, presses Escape or picks another node.
+  const [pinned, setPinnedState] = useState<string | null>(null);
+  // Read in the card's close handler, which can run in the same tick as a
+  // click that pins it, before the state above has re-rendered.
+  const pinnedRef = useRef<string | null>(null);
+  const setPinned = (label: string | null) => {
+    pinnedRef.current = label;
+    setPinnedState(label);
+  };
+  useEffect(() => {
+    if (!pinned) return;
+    const close = () => {
+      setPinned(null);
+      setCard(null);
+    };
+    const onPointer = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest(".hover-card__content, .flow-destination")) return;
+      close();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [pinned]);
   const ready = useClientReady();
   const [group, setGroup] = useState(0);
   const [leafReferences, setLeafReferences] = useState<{
@@ -1383,7 +1431,7 @@ export function Flow({
         }}
       >
         <svg
-          className="flow-lines absolute inset-0 size-full stroke-muted opacity-65 [&_[data-evidence=observed]]:stroke-accent [&_[data-evidence=both]]:stroke-accent"
+          className="flow-lines absolute inset-0 size-full overflow-visible stroke-muted opacity-65 [&_[data-evidence=observed]]:stroke-accent [&_[data-evidence=both]]:stroke-accent"
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
           aria-hidden="true"
@@ -1454,7 +1502,11 @@ export function Flow({
               open={card === item.label}
               onOpenChange={(open) =>
                 setCard((current) =>
-                  open ? item.label : current === item.label ? null : current,
+                  open
+                    ? item.label
+                    : current === item.label
+                      ? pinnedRef.current
+                      : current,
                 )
               }
             >
@@ -1471,10 +1523,12 @@ export function Flow({
                     setNotice("");
                     setSelected(index);
                     setCard(item.label);
+                    setPinned(item.label);
                   }}
                 >
                   <SiteIcon
                     host={item.label}
+                    label={item.service?.vendor ?? undefined}
                     fallback={
                       item.declared && !item.observed ? "policy" : "globe"
                     }
