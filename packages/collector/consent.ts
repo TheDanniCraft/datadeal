@@ -14,6 +14,13 @@ export const acceptName = new RegExp(
   `${acceptAllName.source}|^accept (?:additional|analytics) cookies$`,
   "i",
 );
+/**
+ * A control that sits next to "Accept all" in a real consent banner: reject,
+ * settings and the like. The reject word may come last, as in German
+ * ("Optionale Cookies ablehnen").
+ */
+export const otherConsentControl =
+  /^(?:reject|decline|preferences|settings|customi[sz]e|manage|ablehnen|einstellungen|anpassen|nur notwendige)\b|\b(?:reject|decline|ablehnen)$/i;
 export const consentSettleMs = 3000;
 
 export type ConsentChoice = "rejected" | "accepted";
@@ -24,7 +31,11 @@ export function consentPatterns(choice: ConsentChoice) {
     choice === "accepted"
       ? [acceptName, shortAcceptAllName]
       : [rejectName, shortRejectName];
-  return { name: name.source, short: short.source };
+  return {
+    name: name.source,
+    short: short.source,
+    other: otherConsentControl.source,
+  };
 }
 
 /**
@@ -37,6 +48,7 @@ export function consentPatterns(choice: ConsentChoice) {
 export function consentControlInFrame(input: {
   name: string;
   short: string;
+  other: string;
   mode: "count" | "click";
 }): number {
   const name = new RegExp(input.name, "i");
@@ -45,8 +57,7 @@ export function consentControlInFrame(input: {
   const privacyText =
     /\b(?:cookies?|tracking|privacy|datenschutz|einwilligung|consent)\b/i;
   const acceptType = /^(?:accept|allow|alle|alles)\b/i;
-  const otherType =
-    /^(?:reject|decline|preferences|settings|customi[sz]e|manage|ablehnen|einstellungen|anpassen|nur notwendige)\b/i;
+  const otherType = new RegExp(input.other, "i");
   const label = (element: Element) =>
     (
       element.getAttribute("aria-label") ||

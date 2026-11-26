@@ -24,6 +24,7 @@ import {
   acceptAllName,
   acceptName,
   consentSettleMs,
+  otherConsentControl,
   rejectName,
   shortAcceptAllName,
   shortRejectName,
@@ -146,7 +147,7 @@ async function findConsentControl(page: Page, name: RegExp, shortName: RegExp) {
             })
             .filter({
               has: frame.getByRole("button", {
-                name: /^(?:reject|decline|preferences|settings|customi[sz]e|manage|ablehnen|einstellungen|anpassen|nur notwendige)\b/i,
+                name: otherConsentControl,
               }),
             })
             .filter({ hasNot: frame.locator("main, article, nav, header") })

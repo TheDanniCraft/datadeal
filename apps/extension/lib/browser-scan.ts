@@ -49,6 +49,20 @@ export type ScanProgress = {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** A page that stops answering must not stall the scan. */
+function within<T>(work: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    work,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("timed out")), ms),
+    ),
+  ]);
+}
+const scriptTimeout = 8_000;
+const visitTimeout = 75_000;
+const trace = (...parts: unknown[]) =>
+  console.debug("[browser-scan]", ...parts);
+
 async function waitForLoad(tabId: number, timeout = 15_000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
@@ -90,15 +104,16 @@ async function snapshot(
     })),
     homepage,
   );
-  const [inspection] = await browser.scripting
-    .executeScript({
+  const [inspection] = await within(
+    browser.scripting.executeScript({
       target: { tabId },
       func: inspectWebStorage,
       args: [
         { expectedOrigin: homepage.origin, limit: storageInspectionLimit },
       ],
-    })
-    .catch(() => []);
+    }),
+    scriptTimeout,
+  ).catch(() => []);
   const web = inspection?.result
     ? webStorageSummary.safeParse(describeWebStorage(inspection.result)).data
     : undefined;
@@ -111,13 +126,14 @@ async function findControl(tabId: number, choice: ConsentChoice) {
   const deadline = Date.now() + 4000;
   let ambiguous = false;
   do {
-    const counts = await browser.scripting
-      .executeScript({
+    const counts = await within(
+      browser.scripting.executeScript({
         target: { tabId, allFrames: true },
         func: consentControlInFrame,
         args: [{ ...patterns, mode: "count" as const }],
-      })
-      .catch(() => []);
+      }),
+      scriptTimeout,
+    ).catch(() => []);
     const found = counts.filter((frame) => (frame.result as number) > 0);
     const [only] = found;
     if (found.length === 1 && only?.result === 1)
@@ -142,6 +158,7 @@ async function visit(
   requested: URL,
   scenario: BrowserScanVisit["scenario"],
   capturePages: boolean,
+  opened: number[],
 ): Promise<{
   visit?: BrowserScanVisit;
   outcome: ConsentCoverage["default"];
@@ -156,6 +173,7 @@ async function visit(
     width: 1280,
     height: 900,
   });
+  if (window?.id !== undefined) opened.push(window.id);
   const tabId = window?.tabs?.[0]?.id;
   if (!window?.id || tabId === undefined)
     return { outcome: "inconclusive", pages: [] };
@@ -273,15 +291,17 @@ async function visit(
     const navigationStartedAt = new Date().toISOString();
     await browser.tabs.update(tabId, { url: requested.href });
     await waitForLoad(tabId);
+    trace(scenario, "loaded");
     const loaded = await browser.tabs.get(tabId);
     if (!onSite(loaded.url)) return { outcome: "inconclusive", pages };
     homepage = new URL(new URL(loaded.url!).origin + "/");
-    const [shown] = await browser.scripting
-      .executeScript({
+    const [shown] = await within(
+      browser.scripting.executeScript({
         target: { tabId },
         func: () => document.documentElement.outerHTML,
-      })
-      .catch(() => []);
+      }),
+      scriptTimeout,
+    ).catch(() => []);
     if (isBlockPage(String(shown?.result ?? "")))
       return { outcome: "inconclusive", pages, blocked: true };
 
@@ -295,11 +315,15 @@ async function visit(
         () => undefined,
       );
       choiceStart = requests;
-      await browser.scripting.executeScript({
-        target: { tabId, frameIds: [found.frameId] },
-        func: consentControlInFrame,
-        args: [{ ...consentPatterns(scenario), mode: "click" as const }],
-      });
+      trace(scenario, "click");
+      await within(
+        browser.scripting.executeScript({
+          target: { tabId, frameIds: [found.frameId] },
+          func: consentControlInFrame,
+          args: [{ ...consentPatterns(scenario), mode: "click" as const }],
+        }),
+        scriptTimeout,
+      ).catch(() => []);
     } else {
       beforeChoice = await snapshot(tabId, storeId, homepage).catch(
         () => undefined,
@@ -310,26 +334,31 @@ async function visit(
     const landed = new URL((await browser.tabs.get(tabId)).url ?? "");
     if (landed.origin !== homepage.origin)
       return { outcome: "inconclusive", pages };
+    trace(scenario, "settled");
     const end = await snapshot(tabId, storeId, homepage);
+    trace(scenario, "snapshot");
     const endSnapshotAt = new Date().toISOString();
 
     if (capturePages) {
       // The rendered homepage and up to three privacy pages, for the
       // server's policy reading (the site refuses the server's requests).
-      const [home] = await browser.scripting.executeScript({
-        target: { tabId },
-        func: () => ({
-          html: document.documentElement.outerHTML,
-          links: Array.from(document.querySelectorAll("a[href]"))
-            .map((a) => ({
-              href: (a as HTMLAnchorElement).href,
-              text: (a.textContent ?? "").trim(),
-            }))
-            .filter(({ href, text }) =>
-              /privacy|datenschutz|cookie|polic/i.test(href + " " + text),
-            ),
+      const [home] = await within(
+        browser.scripting.executeScript({
+          target: { tabId },
+          func: () => ({
+            html: document.documentElement.outerHTML,
+            links: Array.from(document.querySelectorAll("a[href]"))
+              .map((a) => ({
+                href: (a as HTMLAnchorElement).href,
+                text: (a.textContent ?? "").trim(),
+              }))
+              .filter(({ href, text }) =>
+                /privacy|datenschutz|cookie|polic/i.test(href + " " + text),
+              ),
+          }),
         }),
-      });
+        scriptTimeout,
+      ).catch(() => []);
       const result = home?.result;
       if (result) {
         pages.push({
@@ -347,15 +376,16 @@ async function visit(
           await browser.tabs.update(tabId, { url: link });
           await waitForLoad(tabId);
           await delay(800);
-          const [page] = await browser.scripting
-            .executeScript({
+          const [page] = await within(
+            browser.scripting.executeScript({
               target: { tabId },
               func: () => ({
                 url: location.href,
                 html: document.documentElement.outerHTML,
               }),
-            })
-            .catch(() => []);
+            }),
+            scriptTimeout,
+          ).catch(() => []);
           if (page?.result)
             pages.push({
               url: page.result.url,
@@ -404,7 +434,8 @@ async function visit(
         },
       },
     };
-  } catch {
+  } catch (error) {
+    trace(scenario, "failed", String(error));
     return { outcome: "inconclusive", pages };
   } finally {
     browser.webRequest.onBeforeRequest.removeListener(onBefore);
@@ -433,16 +464,27 @@ export async function runBrowserScan(
   const scenarios = ["default", "rejected", "accepted"] as const;
   for (const [index, scenario] of scenarios.entries()) {
     onProgress({ step: "visit", scenario, index, total: scenarios.length });
-    const result = await visit(finalHome, scenario, scenario === "default");
+    const opened: number[] = [];
+    const result = await within(
+      visit(finalHome, scenario, scenario === "default", opened),
+      visitTimeout,
+    ).catch(async () => {
+      trace(scenario, "visit timed out");
+      // Close the stuck private window so the next visit starts clean.
+      for (const id of opened) await browser.windows.remove(id).catch(() => {});
+      await delay(400);
+      return { outcome: "inconclusive" as const, pages: [] };
+    });
     coverage[scenario] = result.outcome;
-    blocked ||= Boolean(result.blocked);
-    if (result.visit) {
+    blocked ||= "blocked" in result && Boolean(result.blocked);
+    if ("visit" in result && result.visit) {
       visits.push(result.visit);
       // Follow the site's own redirect (e.g. to www.) for later visits.
       if (scenario === "default")
         finalHome = new URL(new URL(result.visit.visitedUrl).origin + "/");
     }
     if (result.pages.length) pages = result.pages;
+    trace(scenario, result.outcome);
   }
   onProgress({ step: "done", index: 3, total: 3 });
   const agent = navigator.userAgent;
