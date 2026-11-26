@@ -1,4 +1,4 @@
-import { domain } from "@datadeal/contracts";
+import { domain, siteDomain } from "@datadeal/contracts";
 import { createHash } from "node:crypto";
 import { database } from "../../../../../lib/reports";
 import { auth } from "../../../../../lib/auth";
@@ -9,7 +9,7 @@ import { scanClientKey } from "../../../../../lib/scan-limit";
 type Context = { params: Promise<{ domain: string }> };
 
 export async function GET(_request: Request, { params }: Context) {
-  const parsed = domain.safeParse((await params).domain);
+  const parsed = siteDomain.safeParse((await params).domain);
   if (!parsed.success)
     return Response.json({ error: "Invalid domain" }, { status: 400 });
   return Response.json(await publishedReportPayload(parsed.data));
@@ -34,7 +34,7 @@ export async function POST(request: Request, { params }: Context) {
       { status: 403 },
     );
   }
-  const parsed = domain.safeParse((await params).domain);
+  const parsed = siteDomain.safeParse((await params).domain);
   if (!parsed.success)
     return Response.json({ error: "Invalid domain" }, { status: 400 });
   if (!database)

@@ -1,8 +1,8 @@
-import { domain } from "@datadeal/contracts";
+import { domain, siteDomain } from "@datadeal/contracts";
 
 export function GET(request: Request) {
   const url = new URL(request.url);
-  const parsed = domain.safeParse(url.searchParams.get("domain"));
+  const parsed = siteDomain.safeParse(url.searchParams.get("domain"));
   if (!parsed.success)
     return new Response("Enter a public domain, such as example.com.", {
       status: 400,

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { comparisonQuery, domain } from "@datadeal/contracts";
+import { comparisonQuery, domain, siteDomain } from "@datadeal/contracts";
 
 export default async function ComparePage({
   searchParams,
@@ -10,7 +10,7 @@ export default async function ComparePage({
   }>;
 }) {
   const params = await searchParams;
-  const left = domain.safeParse(params.left);
+  const left = siteDomain.safeParse(params.left);
   if (!left.success) redirect("/");
   const pair = comparisonQuery.safeParse(params);
   redirect(

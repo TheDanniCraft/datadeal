@@ -56,6 +56,11 @@ export const domain = z
     "Enter a public domain, such as example.com.",
   );
 
+/** A site name: www.example.com and example.com are the same site. */
+export const siteDomain = domain.transform((host) =>
+  host.startsWith("www.") && host.slice(4).includes(".") ? host.slice(4) : host,
+);
+
 export const states = [
   "requested",
   "queued",

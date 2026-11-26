@@ -3,8 +3,8 @@ import { RewardFromQuery } from "../../rewards/reward-modal";
 import { cookies, headers } from "next/headers";
 
 import { auth } from "../../../lib/auth";
-import { notFound } from "next/navigation";
-import { domain, scanReport } from "@datadeal/contracts";
+import { notFound, permanentRedirect } from "next/navigation";
+import { domain, scanReport, siteDomain } from "@datadeal/contracts";
 import { database, demoMode, lookup } from "../../../lib/reports";
 import { ReportContent } from "./report-content";
 import {
@@ -62,8 +62,18 @@ export default async function ReportPage({
     "ad-test"?: string;
   }>;
 }) {
-  const parsed = domain.safeParse((await params).domain);
+  const requested = decodeURIComponent((await params).domain).toLowerCase();
+  const parsed = siteDomain.safeParse(requested);
   if (!parsed.success) notFound();
+  // www.example.com is example.com: one report per site.
+  if (parsed.data !== requested) {
+    const query = new URLSearchParams(
+      Object.entries(await searchParams).flatMap(([key, value]) =>
+        typeof value === "string" ? [[key, value]] : [],
+      ),
+    ).toString();
+    permanentRedirect("/report/" + parsed.data + (query ? "?" + query : ""));
+  }
   const {
     host,
     report: latest,

@@ -10,7 +10,7 @@ import {
 } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { domain } from "@datadeal/contracts";
+import { domain, siteDomain } from "@datadeal/contracts";
 import { bundledSiteFavicon } from "../lib/site-favicon";
 
 export function DomainSearch({
@@ -21,7 +21,7 @@ export function DomainSearch({
   const [error, setError] = useState("");
   const [value, setValue] = useState("");
   const [iconHost, setIconHost] = useState<string>();
-  const parsedDomain = domain.safeParse(value);
+  const parsedDomain = siteDomain.safeParse(value);
   const host = parsedDomain.success ? parsedDomain.data : undefined;
   useEffect(() => {
     if (!host) return;
@@ -34,7 +34,7 @@ export function DomainSearch({
       action="/search"
       onSubmit={(event) => {
         event.preventDefault();
-        const parsed = domain.safeParse(
+        const parsed = siteDomain.safeParse(
           new FormData(event.currentTarget).get("domain"),
         );
         if (!parsed.success) {

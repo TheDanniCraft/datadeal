@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { domain } from "@datadeal/contracts";
+import { domain, siteDomain } from "@datadeal/contracts";
 import { defaultRefreshPointCost } from "@datadeal/contracts/paper-plane";
 import { Button, Input, Label, TextField } from "@heroui/react";
 
@@ -30,7 +30,7 @@ export function RefreshWithPoints({ balance }: { balance: number }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const pending = useRef<{ host: string; id: string } | null>(null);
-  const parsed = domain.safeParse(host);
+  const parsed = siteDomain.safeParse(host);
   return (
     <section aria-labelledby="point-refresh" className="space-y-3">
       <h2 id="point-refresh" className="text-xl">

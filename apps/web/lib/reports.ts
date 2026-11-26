@@ -1,5 +1,5 @@
 import { database } from "./database";
-import { domain, scanReport } from "@datadeal/contracts";
+import { domain, scanReport, siteDomain } from "@datadeal/contracts";
 import { evaluateHeadline } from "@datadeal/scoring";
 import {
   scopedHostingEvidence,
@@ -55,7 +55,7 @@ export function selectPublishedReport(
 }
 
 export async function lookup(input: string) {
-  const host = domain.parse(input);
+  const host = siteDomain.parse(input);
   const history = (await database?.list(host)) ?? [];
   let { report, score } = selectPublishedReport(history, demoMode);
   let cursor = history.length === 20 ? history.at(-1)?.id : undefined;

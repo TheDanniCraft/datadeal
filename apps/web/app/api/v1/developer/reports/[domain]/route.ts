@@ -1,4 +1,4 @@
-import { domain } from "@datadeal/contracts";
+import { domain, siteDomain } from "@datadeal/contracts";
 import { createHash } from "node:crypto";
 import {
   developerApiPreview,
@@ -44,7 +44,7 @@ async function readReport(
       { status: 403, headers },
     );
 
-  const parsed = domain.safeParse((await params).domain);
+  const parsed = siteDomain.safeParse((await params).domain);
   if (!parsed.success)
     return Response.json({ code: "invalid_domain" }, { status: 400, headers });
 

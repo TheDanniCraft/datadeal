@@ -1,4 +1,4 @@
-import { domain } from "@datadeal/contracts";
+import { domain, siteDomain } from "@datadeal/contracts";
 import { measuredContentVisits } from "@datadeal/contracts/content-page";
 import { auth } from "../../../../../../lib/auth";
 import { database, lookup } from "../../../../../../lib/reports";
@@ -20,7 +20,7 @@ export async function GET(
       { status: 403, headers },
     );
 
-  const parsed = domain.safeParse((await params).domain);
+  const parsed = siteDomain.safeParse((await params).domain);
   if (!parsed.success)
     return Response.json({ error: "Invalid domain" }, { status: 400, headers });
   const [exact, references] = await Promise.all([

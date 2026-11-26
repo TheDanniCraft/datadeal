@@ -1,4 +1,4 @@
-import { domain } from "@datadeal/contracts";
+import { domain, siteDomain } from "@datadeal/contracts";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { developerScanCost } from "../../../../../../lib/developer-token";
@@ -30,7 +30,7 @@ export async function POST(
   if (auth instanceof Response) return auth;
   const { userId } = auth;
 
-  const parsed = domain.safeParse((await params).domain);
+  const parsed = siteDomain.safeParse((await params).domain);
   if (!parsed.success) return reject("invalid_domain", 400);
   const key = request.headers.get("Idempotency-Key");
   if (!key || !/^[A-Za-z0-9._:-]{1,160}$/.test(key))

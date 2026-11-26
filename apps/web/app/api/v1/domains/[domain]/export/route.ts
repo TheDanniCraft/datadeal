@@ -1,4 +1,4 @@
-import { domain, scanReport } from "@datadeal/contracts";
+import { domain, scanReport, siteDomain } from "@datadeal/contracts";
 import { evaluateHeadline } from "@datadeal/scoring";
 import { z } from "zod";
 import { auth } from "../../../../../../lib/auth";
@@ -21,7 +21,7 @@ export async function GET(
       { status: 403, headers },
     );
 
-  const host = domain.safeParse((await params).domain);
+  const host = siteDomain.safeParse((await params).domain);
   const id = z.uuid().safeParse(new URL(request.url).searchParams.get("scan"));
   if (!host.success || !id.success)
     return Response.json(
