@@ -43,7 +43,11 @@ import {
 import * as schema from "./schema";
 export { applyReportPoints } from "./report-points";
 import { applyReportPoints } from "./report-points";
-import { queueBoostCost } from "@datadeal/contracts/paper-plane";
+import {
+  freeRescanSites,
+  monitorDailyCost,
+  queueBoostCost,
+} from "@datadeal/contracts/paper-plane";
 import { paperPlaneStorage } from "./paper-plane";
 import { postgresScanArtifacts } from "./scan-artifacts";
 import { scanRewardStorage } from "./scan-rewards";
@@ -119,10 +123,35 @@ export function connect(url: string, { reusePool = false } = {}) {
           ))
       )`;
   }
+  /** Pays today for one monitor. Returns true when it had to stop. */
+  async function chargeMonitor(userId: string, host: string) {
+    return sql.begin(async (tx) => {
+      const [monitor] = await tx<{ paid: boolean }[]>`
+        select coalesce(paid_through >= current_date, false) as paid
+        from site_monitors where user_id = ${userId} and domain = ${host} for update`;
+      if (!monitor) return false;
+      if (monitor.paid) return false;
+      const [day] = await tx<{ reference: string }[]>`
+        select md5(${userId} || '|' || ${host} || '|' || current_date::text)::uuid::text as reference`;
+      const debit = await applyReportPoints(tx, {
+        userId,
+        delta: -monitorDailyCost,
+        operation: "site_monitor",
+        referenceId: day!.reference,
+      });
+      if (debit === "insufficient") {
+        await tx`delete from site_monitors where user_id = ${userId} and domain = ${host}`;
+        return true;
+      }
+      await tx`update site_monitors set paid_through = current_date
+        where user_id = ${userId} and domain = ${host}`;
+      return false;
+    });
+  }
   async function enqueueScan(
     tx: TransactionSql,
     input: string,
-    source: "manual" | "watchlist",
+    source: "manual" | "watchlist" | "monitor",
     priorityUserId?: string,
     admission?: {
       client: string | null;
@@ -146,7 +175,7 @@ export function connect(url: string, { reusePool = false } = {}) {
       source === "manual" &&
       process.env.NODE_ENV !== "production" &&
       process.env.DATADEAL_DEV_SKIP_SCAN_COOLDOWN === "true";
-    const cooldownHours = skipCooldown ? 0 : source === "watchlist" ? 168 : 1;
+    const cooldownHours = skipCooldown ? 0 : source === "manual" ? 1 : 168;
     const [existing] = await tx<
       { id: string; state: string; retryAfter: number }[]
     >`select id, state, greatest(1, ceil(extract(epoch from requested_at + interval '1 hour' - now())))::int as "retryAfter" from scans where domain = ${host}
@@ -686,9 +715,74 @@ export function connect(url: string, { reusePool = false } = {}) {
         limit 3`;
       return rows.map((row) => row.domain);
     },
+    /**
+     * Sites due for a weekly rescan outside the Pro watchlist: those someone
+     * pays to monitor, and the most requested sites, which rescan for free.
+     */
+    async dueMonitoredDomains() {
+      const rows = await sql<{ domain: string }[]>`
+        with wanted as (
+          select domain, 0 as rank from site_monitors
+          where paid_through >= current_date
+          union all
+          select domain, 1 from (
+            select domain from scans
+            where requested_at > now() - interval '30 days'
+              and report->'demo' = 'false'::jsonb
+            group by domain order by count(*) desc, domain
+            limit ${freeRescanSites}
+          ) popular
+        )
+        select w.domain from wanted w
+        where not exists (select 1 from scans s where s.domain = w.domain
+          and (s.state in ('queued','fetching') or s.requested_at > now() - interval '7 days'))
+          and exists (select 1 from scans s where s.domain = w.domain
+            and s.state in ('completed','partially_completed'))
+        group by w.domain order by min(w.rank), w.domain
+        limit 3`;
+      return rows.map((row) => row.domain);
+    },
+    /** Charge each monitor once per day; stop the ones that cannot pay. */
+    async chargeMonitors() {
+      const due = await sql<{ user_id: string; domain: string }[]>`
+        select user_id, domain from site_monitors
+        where paid_through is null or paid_through < current_date
+        order by user_id, domain limit 500`;
+      let stopped = 0;
+      for (const row of due)
+        stopped += Number(await chargeMonitor(row.user_id, row.domain));
+      return { charged: due.length - stopped, stopped };
+    },
+    async startMonitoring(userId: string, input: string) {
+      const host = domain.parse(input);
+      await sql`insert into domains(name) values(${host}) on conflict do nothing`;
+      await sql`insert into site_monitors(user_id, domain) values(${userId}, ${host})
+        on conflict do nothing`;
+      // Today's day is paid up front, so an empty balance never starts one.
+      return (await chargeMonitor(userId, host))
+        ? ("insufficient" as const)
+        : ("monitoring" as const);
+    },
+    async stopMonitoring(userId: string, input: string) {
+      await sql`delete from site_monitors where user_id = ${userId}
+        and domain = ${domain.parse(input)}`;
+    },
+    async isMonitoring(userId: string, input: string) {
+      const [row] = await sql`select 1 from site_monitors
+        where user_id = ${userId} and domain = ${domain.parse(input)}
+          and paid_through >= current_date`;
+      return Boolean(row);
+    },
+    async listMonitors(userId: string) {
+      const rows = await sql<{ domain: string }[]>`
+        select domain from site_monitors
+        where user_id = ${userId} and paid_through >= current_date
+        order by created_at desc, domain`;
+      return rows.map((row) => row.domain);
+    },
     async enqueue(
       input: string,
-      source: "manual" | "watchlist" = "manual",
+      source: "manual" | "watchlist" | "monitor" = "manual",
       priorityUserId?: string,
     ) {
       const result = await sql.begin((tx) =>

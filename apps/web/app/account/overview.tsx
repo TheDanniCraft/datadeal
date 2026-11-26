@@ -7,6 +7,7 @@ import { RecentReportList } from "../recent-report-list";
 import { AccountEmpty, AccountIcon } from "./account-ui";
 import type { AccountSymbol } from "./account-icon";
 import { pointOperations } from "./rewards/operations";
+import { monitorDailyCost } from "@datadeal/contracts/paper-plane";
 import { LocalDate } from "../../lib/local-date";
 
 function Tile({
@@ -68,18 +69,22 @@ export async function AccountOverview({
   points: boolean;
 }) {
   if (!database) return null;
-  const [billing, wallet, unlocked, watchlist] = await Promise.all([
+  const [billing, wallet, unlocked, watchlist, monitors] = await Promise.all([
     database.billingSummary(userId),
     points ? database.reportPointWallet(userId) : null,
     database.unlockedDomains(userId),
     database.listWatchlist(userId),
+    points ? database.listMonitors(userId) : [],
   ]);
   const pro = Boolean(billing?.has_access);
   const watched = watchlist.map((item) => item.domain);
-  const [unlockedReports, watchedReports] = await Promise.all([
-    database.latestReports(unlocked),
-    database.latestReports(watched.slice(0, 6)),
-  ]);
+  const [unlockedReports, watchedReports, monitoredReports] = await Promise.all(
+    [
+      database.latestReports(unlocked),
+      database.latestReports(watched.slice(0, 6)),
+      database.latestReports(monitors),
+    ],
+  );
   const lastPoints = wallet?.activity[0];
 
   return (
@@ -173,6 +178,16 @@ export async function AccountOverview({
           )}
         </Section>
       </div>
+
+      {monitoredReports.length > 0 && (
+        <Section title="Kept updated">
+          <p className="m-0 -mt-1 text-sm text-muted">
+            Rescanned every week for {monitorDailyCost} points a day each. Stop
+            from the report&apos;s Keep updated button.
+          </p>
+          <RecentReportList reports={monitoredReports} />
+        </Section>
+      )}
 
       {pro && (
         <Section

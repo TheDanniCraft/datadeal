@@ -6,6 +6,13 @@ export const defaultReportPointCost = 150;
 export const defaultRefreshPointCost = 150;
 /** Moves a waiting scan to the front of the queue: 1.5x a normal action. */
 export const queueBoostCost = 225;
+/**
+ * "Keep me updated": paid each day, about one unlock a month. The site is
+ * rescanned weekly and every new report of it stays open.
+ */
+export const monitorDailyCost = 5;
+/** The most requested sites rescan weekly for free. */
+export const freeRescanSites = 50;
 // Surviving flights pause here once so the player can bank or fly on
 // (the reference recording paused at 36).
 export const flightCheckpoint = 50;

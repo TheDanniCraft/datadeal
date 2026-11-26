@@ -150,7 +150,12 @@ export default async function ReportPage({
           (entry) => entry.scanId !== report.id,
         )
       : [];
-  const scanReward = localReward || accountReward;
+  // A site this account monitors keeps every new report open.
+  const monitoring =
+    !pro && session && database && localPointsEnabled()
+      ? await database.isMonitoring(session.user.id, host)
+      : false;
+  const scanReward = localReward || accountReward || monitoring;
   const advanced =
     pro ||
     scanReward ||
@@ -458,6 +463,11 @@ export default async function ReportPage({
         }
         blocked={blockedScan}
         queuePosition={queuePosition ?? undefined}
+        keepUpdated={
+          session && !pro && localPointsEnabled() && report && !report.demo
+            ? { monitoring, balance: pointBalance }
+            : undefined
+        }
         boost={
           session && !pro && localPointsEnabled() && current === "queued"
             ? { scanId: history[0].id, balance: pointBalance }

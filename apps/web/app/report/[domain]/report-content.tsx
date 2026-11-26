@@ -22,6 +22,7 @@ import { ScanProgress } from "./scan-progress";
 import { ProviderDisclosure } from "../../data-flow/provider-lookup";
 import { RewardedAdTest } from "./rewarded-ad-test";
 import { BoostScan } from "./boost-scan";
+import { KeepUpdated } from "./keep-updated";
 import { LocalDate, useTimeZone } from "../../../lib/local-date";
 import { useClientReady } from "../../use-client-ready";
 import type { publicPolicyHighlights } from "../../../lib/policy-highlights";
@@ -1939,6 +1940,7 @@ export function ReportContent({
   blocked = false,
   queuePosition,
   boost,
+  keepUpdated,
   browserScan,
   activeStages,
   previousRewardedScan,
@@ -1981,6 +1983,8 @@ export function ReportContent({
   queuePosition?: number;
   /** Report points to skip the scan queue, for signed-in visitors. */
   boost?: { scanId: string; balance: number };
+  /** Points-funded weekly rescans for signed-in visitors. */
+  keepUpdated?: { monitoring: boolean; balance: number };
   /** Set when the site blocks the scanner: run it in a visitor's browser. */
   browserScan?: {
     signedIn: boolean;
@@ -2984,6 +2988,9 @@ export function ReportContent({
           </span>
           <div className="flex shrink-0 items-center gap-0.5">
             {hasUsableReport && (archived || scanAvailable) && scanAction}
+            {!archived && hasUsableReport && keepUpdated && (
+              <KeepUpdated host={host} {...keepUpdated} />
+            )}
             {!archived && <ReportCompare host={host} />}
           </div>
         </div>
