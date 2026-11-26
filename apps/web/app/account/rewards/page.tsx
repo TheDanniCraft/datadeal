@@ -4,7 +4,6 @@ import { auth } from "../../../lib/auth";
 import { localPointsEnabled } from "../../../lib/local-reward";
 import { database } from "../../../lib/reports";
 import { AccountScreen } from "../account-ui";
-import { RefreshWithPoints } from "./refresh-with-points";
 import { pointOperations as operations } from "./operations";
 import { LocalDate } from "../../../lib/local-date";
 import { RewardFromQuery } from "../../rewards/reward-modal";
@@ -17,7 +16,7 @@ export default async function RewardsWallet() {
   return (
     <AccountScreen
       title="Report points"
-      description="Use your points to open an advanced report or request a fresh scan."
+      description="Points open advanced reports without an ad. Earn them by flying the paper plane."
       current="/account/rewards"
     >
       <div>
@@ -31,7 +30,6 @@ export default async function RewardsWallet() {
       </div>
       <FlyForPoints freeFlights={wallet.tickets.map((ticket) => ticket.id)} />
       <RewardFromQuery signedIn />
-      <RefreshWithPoints balance={wallet.balance} />
       <section>
         <h2 className="mb-2 text-xl">Recent activity</h2>
         {wallet.activity.length ? (
