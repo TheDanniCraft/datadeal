@@ -4,13 +4,7 @@ import {
   useAdvertisingConsent,
   useLimitedAdsPurposeOffered,
 } from "../../../lib/ads/use-advertising-consent";
-import {
-  Button,
-  Disclosure,
-  Modal,
-  Spinner,
-  buttonVariants,
-} from "@heroui/react";
+import { Button, Modal, Spinner, buttonVariants } from "@heroui/react";
 import { ReportIcon } from "./report-icon";
 import { useCallback, useEffect, useState } from "react";
 import { RewardModal } from "../../rewards/reward-modal";
@@ -49,6 +43,7 @@ type GoogleTag = {
 };
 import {
   defaultReportPointCost,
+  flightCap,
   guaranteedPoints,
 } from "@datadeal/contracts/paper-plane";
 function TestOffer({
@@ -57,12 +52,14 @@ function TestOffer({
   limited,
   game,
   signedIn,
+  label = "Watch an ad to unlock",
 }: {
   host: string;
   scanId: string;
   limited: boolean;
   game: boolean;
   signedIn: boolean;
+  label?: string;
 }) {
   const [choice, setChoice] = useState<"unlock" | "choice" | "flight">(
     "unlock",
@@ -269,7 +266,7 @@ function TestOffer({
                 ? choice === "unlock"
                   ? "Retry unlock"
                   : "Retry reward"
-                : "Watch an ad to unlock"}
+                : label}
         </Button>
       )}
       <RewardModal
@@ -310,7 +307,7 @@ function TestOffer({
                       ],
                       [
                         "Paper-plane flight",
-                        "Collect before the plane flies away for 1–1,000 points, or miss and get nothing.",
+                        `Collect before the plane flies away for 1–${flightCap} points, or miss and get nothing.`,
                       ],
                     ].map(([title, text]) => (
                       <li
@@ -389,31 +386,94 @@ export function RewardedAdTest({
   scanId,
   game = false,
   signedIn = false,
+  pointBalance = 0,
 }: {
   host: string;
   scanId: string;
   game?: boolean;
   signedIn?: boolean;
+  pointBalance?: number;
 }) {
   const consent = useAdvertisingConsent();
   const limitedOffered = useLimitedAdsPurposeOffered();
   const [spendMessage, setSpendMessage] = useState("");
   const [spending, setSpending] = useState(false);
   const adsEligible = consent !== "privacy-signal" || limitedOffered;
-  if (!adsEligible && !(game && signedIn)) return null;
+  const points = game && signedIn;
+  const canSpend = points && pointBalance >= defaultReportPointCost;
+  if (!adsEligible && !points) return null;
+  const adsReady = consent === "allowed" || consent === "limited";
+
+  const spend = async () => {
+    setSpending(true);
+    setSpendMessage("");
+    try {
+      const res = await fetch("/api/v1/rewards/offers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "spend",
+          host,
+          scanId,
+          spendPoints: true,
+        }),
+      });
+      const body = await res.json();
+      if (res.ok) {
+        window.location.reload();
+        return;
+      }
+      setSpendMessage(
+        body.code === "insufficient"
+          ? "Your balance is too low."
+          : "This scan is unavailable.",
+      );
+    } catch {
+      setSpendMessage("Could not confirm the unlock. Try again.");
+    } finally {
+      setSpending(false);
+    }
+  };
+
+  const description = canSpend
+    ? `You have ${pointBalance} report points. Unlock this scan for ${defaultReportPointCost} and keep it in your account, no ad needed.`
+    : consent === "privacy-signal"
+      ? "You can choose limited advertising in Privacy settings when it is available."
+      : "Watch a short ad for 24-hour access, including rescans.";
+
   return (
     <div className="grid min-w-0 gap-y-2 border-t border-separator px-5 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-6 sm:gap-y-0 sm:px-8">
-      {adsEligible && (
-        <>
-          <div className="min-w-0 self-center sm:col-start-1 sm:row-span-2">
-            <h3 className="m-0 text-base font-semibold">One-domain access</h3>
-            <p className="mt-1 mb-0 max-w-prose text-sm leading-relaxed text-muted">
-              {consent === "privacy-signal"
-                ? "You can choose limited advertising in Privacy settings when it is available."
-                : "Watch a short ad for 24-hour access, including rescans."}
-            </p>
-          </div>
-          {consent === "allowed" || consent === "limited" ? (
+      <div className="min-w-0 self-center sm:col-start-1 sm:row-span-2">
+        <h3 className="m-0 text-base font-semibold">One-domain access</h3>
+        <p className="mt-1 mb-0 max-w-prose text-sm leading-relaxed text-muted">
+          {description}
+        </p>
+        {points && !canSpend && (
+          <p className="mt-1 mb-0 text-xs text-muted">
+            You have {pointBalance} of the {defaultReportPointCost} report
+            points that unlock a scan without an ad.{" "}
+            <a className="inline-link" href="/account/rewards">
+              My points
+            </a>
+          </p>
+        )}
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-2 sm:col-start-2 sm:row-start-1 sm:self-center sm:justify-end">
+        {canSpend && (
+          <Button
+            size="sm"
+            className="min-h-11 w-full gap-2 sm:w-auto"
+            isDisabled={spending}
+            onPress={() => void spend()}
+          >
+            {spending && (
+              <Spinner size="sm" color="current" aria-hidden="true" />
+            )}
+            Unlock for {defaultReportPointCost} points
+          </Button>
+        )}
+        {adsEligible &&
+          (adsReady ? (
             <TestOffer
               key={consent}
               game={game}
@@ -421,85 +481,28 @@ export function RewardedAdTest({
               limited={consent === "limited"}
               host={host}
               scanId={scanId}
+              label={canSpend ? "Watch an ad instead" : undefined}
             />
           ) : (
-            <ConsentDialogLink
-              className={buttonVariants({
-                variant: "secondary",
-                size: "sm",
-                className: "min-h-11 w-full sm:w-auto sm:self-center",
-              })}
-            >
-              {consent === "privacy-signal"
-                ? "Review limited ad settings"
-                : "Review advertising consent"}
-            </ConsentDialogLink>
-          )}
-        </>
-      )}
-      {game && signedIn && (
-        <Disclosure className="w-full sm:col-span-2">
-          <Disclosure.Heading>
-            <Button
-              slot="trigger"
-              variant="ghost"
-              size="sm"
-              className="min-h-9 px-0"
-            >
-              Use report points <Disclosure.Indicator />
-            </Button>
-          </Disclosure.Heading>
-          <Disclosure.Content>
-            <Disclosure.Body className="space-y-2 py-2">
-              <p className="text-sm">
-                Keep this scan of {host} in your account.
-              </p>
-              <Button
-                size="sm"
-                variant="secondary"
-                isDisabled={spending}
-                onPress={async () => {
-                  setSpending(true);
-                  try {
-                    const res = await fetch("/api/v1/rewards/offers", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        action: "spend",
-                        host,
-                        scanId,
-                        spendPoints: true,
-                      }),
-                    });
-                    const body = await res.json();
-                    if (res.ok) {
-                      window.location.reload();
-                      return;
-                    }
-                    setSpendMessage(
-                      body.code === "insufficient"
-                        ? "Your balance is too low."
-                        : "This scan is unavailable.",
-                    );
-                  } catch {
-                    setSpendMessage("Could not confirm the unlock. Try again.");
-                  } finally {
-                    setSpending(false);
-                  }
-                }}
+            !canSpend && (
+              <ConsentDialogLink
+                className={buttonVariants({
+                  variant: "secondary",
+                  size: "sm",
+                  className: "min-h-11 w-full sm:w-auto",
+                })}
               >
-                Unlock for {defaultReportPointCost} points
-              </Button>{" "}
-              <a
-                className="inline-link ms-2 inline-flex min-h-10 items-center text-sm"
-                href="/account/rewards"
-              >
-                My points
-              </a>
-              {spendMessage && <p role="status">{spendMessage}</p>}
-            </Disclosure.Body>
-          </Disclosure.Content>
-        </Disclosure>
+                {consent === "privacy-signal"
+                  ? "Review limited ad settings"
+                  : "Review advertising consent"}
+              </ConsentDialogLink>
+            )
+          ))}
+      </div>
+      {spendMessage && (
+        <p role="status" className="m-0 text-sm sm:col-span-2">
+          {spendMessage}
+        </p>
       )}
     </div>
   );

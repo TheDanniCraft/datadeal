@@ -2022,6 +2022,7 @@ export function ReportContent({
     scanId: string;
     game?: boolean;
     signedIn?: boolean;
+    pointBalance?: number;
   };
   minimizeData: boolean;
   comparison?: ScanComparison;

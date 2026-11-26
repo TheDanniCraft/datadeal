@@ -115,6 +115,11 @@ export default async function ReportPage({
   const session = await auth?.api.getSession({ headers: await headers() });
   const pro =
     session && database ? await database.hasPro(session.user.id) : false;
+  // Enough points open the report without an ad.
+  const pointBalance =
+    session && database && !pro && localPointsEnabled()
+      ? (await database.reportPointWallet(session.user.id)).balance
+      : 0;
   const rewardCookies = report && localRewardEnabled() ? await cookies() : null;
   const localRewardValue = report
     ? rewardCookies?.get(localRewardCookie(report.id))?.value
@@ -480,6 +485,7 @@ export default async function ReportPage({
                 scanId: report.id,
                 game: localPointsEnabled(),
                 signedIn: Boolean(session),
+                pointBalance,
               }
             : undefined
         }
