@@ -745,6 +745,26 @@ export function connect(url: string, { reusePool = false } = {}) {
         return true;
       });
     },
+    /** 1 = next to start. Uses the same order as claim(); running scans are not counted. */
+    async queuePosition(id: string) {
+      const [row] = await sql<{ position: number }[]>`
+        with waiting as (
+          select s.id, row_number() over (order by case
+            when s.requested_at <= now() - interval '10 minutes' then 0
+            when j.priority then 1
+            when exists (
+              select 1 from scans published where published.domain = s.domain
+                and published.state in ('completed', 'partially_completed')
+                and published.report->'demo' = 'false'::jsonb
+            ) then 3
+            else 2
+          end, s.requested_at, s.id)::int as position
+          from scan_jobs j join scans s on s.id = j.scan_id
+          where not (j.owner is not null and j.lease_until > now())
+        )
+        select position from waiting where id = ${id}`;
+      return row?.position ?? null;
+    },
     async activeScanStages(id: string) {
       const [job] = await sql`select stages from scan_jobs where scan_id = ${id}
         and owner is not null and lease_until > now()`;
@@ -1000,6 +1020,7 @@ export function connect(url: string, { reusePool = false } = {}) {
       owner: string,
       input: unknown,
       analysis?: { hash: string; result: object },
+      failure?: "blocked",
     ) {
       const report = input === null ? null : scanReport.parse(input);
       if (report) {
@@ -1023,7 +1044,8 @@ export function connect(url: string, { reusePool = false } = {}) {
             ? "partially_completed"
             : "completed"
           : "failed";
-        await tx`update scans set state = ${state}, report = ${report ? JSON.stringify(report) : null}::text::jsonb
+        await tx`update scans set state = ${state}, report = ${report ? JSON.stringify(report) : null}::text::jsonb,
+          failure = ${report ? null : (failure ?? null)}
           where id = ${id}`;
         if (!report || !hasBillableScanEvidence(report)) {
           await refundFailedApiScan(tx, id);

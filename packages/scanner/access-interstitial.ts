@@ -1,3 +1,14 @@
+/** Block pages and script challenges that stand in for the real homepage. */
+export function isBlockPage(html: string) {
+  return (
+    // A proof-of-work form that solves itself and resubmits (e.g. Reddit).
+    (/<form\b/i.test(html) &&
+      /name=["']?solution["']?|namedItem\(["']solution["']\)/i.test(html) &&
+      /requestSubmit\(\)|\.submit\(\)/.test(html)) ||
+    /You(?:'|’)ve been blocked by network security/i.test(html)
+  );
+}
+
 /** A CAPTCHA widget embedded in a real page is not a blocked visit. */
 export function isAccessInterstitial(
   title: string,

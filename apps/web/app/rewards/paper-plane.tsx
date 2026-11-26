@@ -491,7 +491,7 @@ export function PaperPlane({
                   [
                     "chooseFlight",
                     "Fly the paper plane",
-                    "1–1,000 points, or nothing if it flies away",
+                    `1–${flightCap} points, or nothing if it flies away`,
                   ],
                   [
                     "choosePoints",
@@ -566,7 +566,7 @@ export function PaperPlane({
                       : "text-accent")
                 }
               >
-                {banked ? "+" + payout : missed ? "0" : "1–1,000"}
+                {banked ? "+" + payout : missed ? "0" : `1–${flightCap}`}
               </span>
             </div>
 
@@ -574,7 +574,7 @@ export function PaperPlane({
               <ol className="m-0 grid list-none gap-2.5 p-0 text-sm">
                 {[
                   "Press Start and the plane takes off.",
-                  "The number grows from 1 to 1,000 points, faster and faster.",
+                  `The number grows from 1 to ${flightCap} points, faster and faster.`,
                   "Press Collect before the plane flies away to keep the number.",
                   "Too late and you get nothing. One flight only.",
                 ].map((text, i) => (

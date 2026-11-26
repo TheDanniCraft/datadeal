@@ -18,18 +18,19 @@ The timing CSV supports an accelerating offer of approximately `exp(0.59085 × a
 
 ## Local development balance
 
-Use a single continuous offer with a maximum of 1,000 points. The local pilot gives a bank target of integer `n` a survival probability of `(200 / (199 + n))²` for 1–1,000. This distribution has a median maximum reachable integer of **83**. The resulting payout depends on the player's decision. A visitor always targeting 200 earns zero on about three quarters of flights, so that strategy has a median payout of zero.
+Use a single continuous offer with a maximum of **500** points. The hidden end point is uniform, so a flight is still in the air at integer `n` with probability `1 − (n − 1) / 500`: failing before 20 happens about 4% of the time, before 50 about 10%, and the 500 cap is reached (and auto-banked) once in 500 flights. The median maximum is 250.
 
 | Choice                   | Active seconds | Chance to bank | Reports affordable from an empty wallet on success | Mean points per ad |
 | ------------------------ | -------------: | -------------: | -------------------------------------------------: | -----------------: |
 | Guaranteed points        |      Immediate |           100% |                                                  1 |               50.0 |
-| Collect 50 at checkpoint |           6.62 |          64.5% |                                                  1 |               32.3 |
-| Collect 100              |           7.79 |          44.7% |                                                  2 |               44.7 |
-| Collect 200              |           8.97 |          25.1% |                                                  4 |               50.3 |
-| Collect 500              |          10.52 |           8.2% |                                                 10 |               40.9 |
-| Reach cap of 1,000       |          11.69 |           2.8% |                                                 20 |               27.8 |
+| Collect 50 at checkpoint |           6.62 |          90.2% |                                                  1 |               45.1 |
+| Collect 100              |           7.79 |          80.2% |                                                  2 |               80.2 |
+| Collect 200              |           8.97 |          60.2% |                                                  4 |              120.4 |
+| Collect 250              |           9.34 |          50.2% |                                                  5 |              125.5 |
+| Collect 400              |          10.14 |          20.2% |                                                  8 |               80.8 |
+| Reach cap of 500         |          10.52 |           0.2% |                                                 10 |                1.0 |
 
-**Example.** For one report today, take the guaranteed unlock. A player trying for two reports can choose 100 in advance. That target succeeds about 45 times per 100 flights. At the 50-point checkpoint, a player still in the air has about a 69% conditional chance of reaching 100. Banking 50 there immediately adds 50 to the wallet, enough for one report. Continuing and missing adds zero. Previous earnings are always retained.
+**Example.** For one report today, take the guaranteed unlock or bank 50 at the checkpoint (90% of flights get there). A player aiming for two reports banks at 100 and succeeds about 80 times in 100. From the 50-point checkpoint, a plane still in the air reaches 100 about 89% of the time. Continuing and missing adds zero. Previous earnings are always retained.
 
 For reproducibility, draw one uniform `U` in (0, 1), then set `T = 1 + 200 × (1 / sqrt(U) − 1)`. The uncapped flight ends at continuous offer T. A target succeeds strictly before T. If T exceeds 1,000 the server automatically banks 1,000 at the cap. No collect can exceed the floored live offer. A simulation with 100,000 draws reached 36 / 50 / 100 / 200 / 500 / 1,000 on 72,498 / 64,634 / 44,698 / 25,034 / 8,128 / 2,722 flights. Its median maximum reachable offer was 83. To repeat it, initialize `s = 20261125`, advance `s = (1664525 × s + 1013904223) mod 2³²` per draw, and use `U = (s + 0.5) / 2³²`. The local pilot uses cryptographic randomness and a server-authoritative clock. These illustrative odds assume no endpoint clues and exclude manual timing and network delay. The timing beyond the recorded endpoint is extrapolated.
 

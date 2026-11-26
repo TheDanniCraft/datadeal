@@ -1931,6 +1931,8 @@ export function ReportContent({
   otherWarnings,
   correctedRating,
   current,
+  blocked = false,
+  queuePosition,
   activeStages,
   previousRewardedScan,
   scanAvailable,
@@ -1966,6 +1968,10 @@ export function ReportContent({
   otherWarnings?: Score["adjustments"];
   correctedRating?: { previous: number | null; date: string; reason: string };
   current?: string;
+  /** The latest scan was refused by the site's bot protection. */
+  blocked?: boolean;
+  /** 1 = next to start, while the scan waits. */
+  queuePosition?: number;
   activeStages?: readonly ScanStage[];
   previousRewardedScan?: string;
   scanAvailable: boolean;
@@ -2813,7 +2819,11 @@ export function ReportContent({
                 ? "Showing the last completed rating. "
                 : hasUsableReport && "Showing the previous report. "}
               {current === "queued"
-                ? "A new scan is queued."
+                ? queuePosition === 1
+                  ? "A new scan is next in line."
+                  : queuePosition
+                    ? `A new scan is queued: number ${queuePosition} in line.`
+                    : "A new scan is queued."
                 : "A scan is running."}
             </p>
           )}
@@ -2822,7 +2832,9 @@ export function ReportContent({
               role="status"
               className="col-span-full my-0! text-sm text-muted sm:mt-2!"
             >
-              The latest scan failed. Showing the previous report.
+              {blocked
+                ? `${host} blocked the latest scan with a bot check. Showing the previous report.`
+                : "The latest scan failed. Showing the previous report."}
             </p>
           )}
         </div>
@@ -2934,11 +2946,17 @@ export function ReportContent({
               </EmptyState.Title>
               <EmptyState.Description>
                 {current === "queued"
-                  ? "Your scan is in line and will start shortly."
+                  ? queuePosition === 1
+                    ? "You’re next in line. Your scan starts in a moment."
+                    : queuePosition
+                      ? `You’re number ${queuePosition} in line. Each scan takes a few minutes.`
+                      : "Your scan is in line and will start shortly."
                   : scanActive
                     ? "DataDeal is gathering public privacy evidence."
                     : current === "failed"
-                      ? "The latest scan couldn’t retrieve enough public material."
+                      ? blocked
+                        ? `${host} blocks automated visits, so DataDeal couldn’t scan it. The site showed a bot check instead of its homepage.`
+                        : "The latest scan couldn’t retrieve enough public material."
                       : report
                         ? "DataDeal couldn’t verify enough about how this site handles personal data."
                         : "Run a scan to see how this website handles your data."}

@@ -29,8 +29,8 @@ import { publicDocumentUrl } from "./public-document-url";
 import { captureDocument } from "./document-layout";
 import { extractPdfText, maxPdfBytes } from "./pdf-document";
 import { pdfDocumentHtml } from "./pdf-layout";
-import { isAccessInterstitial } from "./access-interstitial";
-export { isAccessInterstitial } from "./access-interstitial";
+import { isAccessInterstitial, isBlockPage } from "./access-interstitial";
+export { isAccessInterstitial, isBlockPage } from "./access-interstitial";
 export { scanLanguage } from "./language";
 export * from "./browser-storage";
 import {
@@ -196,7 +196,7 @@ async function readablePage(
       response.headers["cf-mitigated"],
       /\/cdn-cgi\/challenge-platform\/|id=["']challenge-(?:form|stage)["']/i.test(
         html,
-      ),
+      ) || isBlockPage(html),
     )
   )
     throw new Error("Site returned an access challenge");

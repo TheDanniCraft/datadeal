@@ -160,7 +160,18 @@ export async function runWorker(
         const retry =
           isRetryableScanFailure(error) &&
           (await db.retryScan(job.id, job.owner));
-        const failed = !retry && (await db.finish(job.id, job.owner, null));
+        const blocked =
+          error instanceof Error &&
+          error.message === "Site returned an access challenge";
+        const failed =
+          !retry &&
+          (await db.finish(
+            job.id,
+            job.owner,
+            null,
+            undefined,
+            blocked ? "blocked" : undefined,
+          ));
         console.info(
           JSON.stringify({
             event: retry

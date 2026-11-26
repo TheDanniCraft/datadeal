@@ -1,4 +1,4 @@
-export const flightCap = 1000;
+export const flightCap = 500;
 export const guaranteedPoints = 50;
 export const defaultReportPointCost = 50;
 export const defaultRefreshPointCost = 50;
@@ -7,16 +7,21 @@ export const defaultRefreshPointCost = 50;
 export const flightCheckpoint = 50;
 const growthPerSecond = 0.59085;
 
+/**
+ * Chance that a flight is still in the air at integer n: the end point is
+ * uniform, so failing before n is (n - 1) out of the cap. Reaching the cap
+ * itself (and auto-banking it) happens once in flightCap flights.
+ */
 export function survivalProbability(target: number) {
   if (!Number.isInteger(target) || target < 1 || target > flightCap)
-    throw new RangeError("Choose an integer target from 1 to 1,000.");
-  return (200 / (199 + target)) ** 2;
+    throw new RangeError(`Choose an integer target from 1 to ${flightCap}.`);
+  return 1 - (target - 1) / flightCap;
 }
 
 // Draw once on the server. Never send the endpoint to a running flight.
 export function drawFlightEndpoint(u: number) {
   if (!(u > 0 && u < 1)) throw new RangeError("Expected a draw in (0, 1).");
-  return 1 + 200 * (1 / Math.sqrt(u) - 1);
+  return 1 + flightCap * (1 - u);
 }
 
 export function flightTimeMs(points: number) {

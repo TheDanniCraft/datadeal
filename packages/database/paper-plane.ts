@@ -216,8 +216,8 @@ export function paperPlaneStorage(sql: Sql) {
             );
             row.state = "unlocked";
           } else if (row.offer === "choice") {
-            if (row.user_id)
-              await tx`insert into scan_reward_grants(scan_id,user_id) values(${row.scan_id},${row.user_id}) on conflict do nothing`;
+            // Nothing is granted until the visitor picks: keeping the report
+            // ("open") grants it; points or a flight leave it locked.
             row.state = "choose";
           } else row.state = "ready";
           await tx`update report_reward_offers set state=${row.state},payout=${row.payout},completed_at=now() where id=${id}`;

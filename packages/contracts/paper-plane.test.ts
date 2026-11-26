@@ -9,7 +9,9 @@ import {
 
 it("uses the published success curve for a fixed target", () => {
   expect(survivalProbability(1)).toBe(1);
-  expect(survivalProbability(50)).toBeCloseTo(0.64515, 4);
+  expect(survivalProbability(20)).toBeCloseTo(0.962, 9);
+  expect(survivalProbability(50)).toBeCloseTo(0.902, 9);
+  expect(survivalProbability(500)).toBeCloseTo(0.002, 9);
   expect(drawFlightEndpoint(survivalProbability(200))).toBeCloseTo(200, 9);
 });
 it("banks one target before a later crash, including when the player reconnects", () => {
@@ -19,9 +21,9 @@ it("banks one target before a later crash, including when the player reconnects"
   expect(
     resolveFlight({ endpoint: 81, target: 81, activeMs: 30000, collect: true }),
   ).toEqual({ state: "missed", points: 0 });
-  expect(resolveFlight({ endpoint: 1000.1, activeMs: 30000 })).toEqual({
+  expect(resolveFlight({ endpoint: 500.1, activeMs: 30000 })).toEqual({
     state: "banked",
-    points: 1000,
+    points: 500,
   });
 });
 it("allows a manual collect only for the live offer before its endpoint", () => {

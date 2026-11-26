@@ -22,6 +22,8 @@ export const scans = pgTable(
       .notNull()
       .defaultNow(),
     report: jsonb().$type<ScanReport>(),
+    // "blocked" when the site served a bot challenge instead of its homepage.
+    failure: text().$type<"blocked">(),
   },
   (table) => [index("scans_domain_date").on(table.domain, table.requestedAt)],
 );
