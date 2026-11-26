@@ -7,6 +7,7 @@ import { ReportIcon } from "./report-icon";
 import { combineCosts, reportSignals } from "@datadeal/scoring";
 import { ReportSignalIcons } from "./report-signals";
 import { BrowserScan } from "./browser-scan";
+import { ReportOverview } from "./report-overview";
 import { pageName } from "../../../lib/content-pages";
 import { ReportCompare } from "./report-compare";
 import {
@@ -2767,6 +2768,54 @@ export function ReportContent({
     />
   );
 
+  // The report at a glance: tiles and charts before any text.
+  const overview = (
+    <ReportOverview
+      companies={companies}
+      visits={browserVisits.flatMap((visit) =>
+        visit.scenario === "default" ||
+        visit.scenario === "rejected" ||
+        visit.scenario === "accepted"
+          ? [
+              {
+                scenario: visit.scenario,
+                outside: visit.outside,
+                cookies: visit.cookies,
+              },
+            ]
+          : [],
+      )}
+      headline={
+        headlineVisit && {
+          cookies: headlineVisit.cookies,
+          outside: headlineVisit.outside,
+        }
+      }
+    />
+  );
+  // The written findings, kept but folded away below the visuals.
+  const inWords = (summaryClaims.length > 0 || findingsRows.length > 0) && (
+    <section className="report-drill mt-8" aria-labelledby="in-words-title">
+      <h2 id="in-words-title" className="mb-1 text-xl! font-semibold!">
+        In words
+      </h2>
+      <ProviderDisclosure label="Summary and findings">
+        <div className="grid gap-4">
+          {summaryClaims.length > 0 && (
+            <Card
+              role="region"
+              className="report-plain-summary min-w-0 gap-2 border border-border p-4 sm:p-6 [&>p]:my-0! [&>p]:text-[.93rem] [&>p]:leading-relaxed"
+              aria-labelledby="review-summary-title"
+            >
+              {summaryHeading}
+              <SummaryText claims={summaryClaims} />
+            </Card>
+          )}
+          <ReportObservations rows={findingsRows} />
+        </div>
+      </ProviderDisclosure>
+    </section>
+  );
   return (
     <ReportCitations evidence={report?.evidence} visits={browserVisits}>
       <a
@@ -3040,7 +3089,7 @@ export function ReportContent({
         </>
       ) : (
         <>
-          {analysisOverview}
+          {overview}
           {/* Below the score and summary, never above them. */}
           <ReportAdvertisement
             path={adUnit}
@@ -3058,8 +3107,8 @@ export function ReportContent({
             />
           ))}
           {privacyProfileAdvice}
-          <ReportObservations rows={findingsRows} />
           {browserFindingsSection}
+          {inWords}
 
           {ratingComparison}
           {adPreview && (
