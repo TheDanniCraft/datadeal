@@ -64,7 +64,9 @@ function TestOffer({
   game: boolean;
   signedIn: boolean;
 }) {
-  const [choice, setChoice] = useState<"unlock" | "choice">("unlock");
+  const [choice, setChoice] = useState<"unlock" | "choice" | "flight">(
+    "unlock",
+  );
   const [chooserOpen, setChooserOpen] = useState(false);
   const [intent, setIntent] = useState("");
   const [requested, setRequested] = useState(false);
@@ -218,7 +220,7 @@ function TestOffer({
       if (slot) tag.destroySlots([slot]);
     };
   }, [requested, saveReward, limited, intent]);
-  const start = async (offer: "unlock" | "choice") => {
+  const start = async (offer: "unlock" | "choice" | "flight") => {
     setChooserOpen(false);
     setChoice(offer);
     setNotice("");
@@ -274,6 +276,14 @@ function TestOffer({
         rewardId={rewardId}
         signedIn={signedIn}
         onClose={() => setRewardId(null)}
+        onReplay={
+          signedIn && game
+            ? () => {
+                setRewardId(null);
+                void start("flight");
+              }
+            : undefined
+        }
       />
       <Modal.Backdrop isOpen={chooserOpen} onOpenChange={setChooserOpen}>
         <Modal.Container size="lg">

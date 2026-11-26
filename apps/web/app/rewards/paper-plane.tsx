@@ -16,64 +16,80 @@ const growth = Math.log(2) / 1.1731; // the measured curve, ≈0.591 per second
 const checkpointMs = flightTimeMs(flightCheckpoint);
 const decisionMs = 10_000;
 // How far the local clock may run ahead of the last server answer.
-const maxLead = 250;
+const maxLead = 150;
 
-// Chart geometry in the SVG's own units.
-const W = 800;
-const H = 500;
-const left = 70;
-const base = 440;
-const width = 660;
-const height = 370;
-
+type Box = { w: number; h: number };
 type Point = { x: number; y: number };
 
-/** Position on the rising chart for t seconds, at the current zoom. */
-function chartPoint(t: number, spanT: number, spanV: number): Point {
-  const v = Math.exp(growth * t);
-  return {
-    x: left + (width * t) / spanT,
-    y: base - height * Math.pow((v - 1) / (spanV - 1), 0.9),
-  };
+// Where the plane is after t seconds of active flight, as fractions of the
+// panel, measured frame by frame from the reference recording. The plane
+// leaves the bottom-left corner, climbs to the middle and then creeps up
+// and to the right; it only leaves the frame when it flies away.
+const anchors: [number, number, number][] = [
+  [0, 0.09, 0.86],
+  [1.86, 0.25, 0.8],
+  [3.5, 0.37, 0.71],
+  [5.07, 0.48, 0.58],
+  [6.06, 0.56, 0.46],
+  [7, 0.62, 0.39],
+  [8, 0.67, 0.34],
+  [9.25, 0.76, 0.25],
+  [11.7, 0.85, 0.15],
+];
+
+/** Smooth (Catmull-Rom) position along the measured anchors. */
+function position(t: number): [number, number] {
+  const last = anchors.length - 1;
+  if (t >= anchors[last][0]) return [anchors[last][1], anchors[last][2]];
+  let i = 0;
+  while (anchors[i + 1][0] < t) i++;
+  const p0 = anchors[Math.max(0, i - 1)];
+  const p1 = anchors[i];
+  const p2 = anchors[i + 1];
+  const p3 = anchors[Math.min(last, i + 2)];
+  const u = (t - p1[0]) / (p2[0] - p1[0]);
+  const spline = (a: number, b: number, c: number, d: number) =>
+    0.5 *
+    (2 * b +
+      (-a + c) * u +
+      (2 * a - 5 * b + 4 * c - d) * u * u +
+      (-a + 3 * b - 3 * c + d) * u * u * u);
+  return [
+    spline(p0[1], p1[1], p2[1], p3[1]),
+    spline(p0[2], p1[2], p2[2], p3[2]),
+  ];
 }
 
-function flightPath(seconds: number) {
-  const v = Math.exp(growth * seconds);
-  // The view widens as the plane climbs, so it stays near the upper right.
-  const spanT = Math.max(10, seconds / 0.84);
-  const spanV = Math.max(150, v / 0.8);
-  const steps = 90;
-  const points: Point[] = [];
-  for (let i = 0; i <= steps; i++)
-    points.push(chartPoint((seconds * i) / steps, spanT, spanV));
+function flightPath(seconds: number, box: Box) {
+  const at = (t: number): Point => {
+    const [x, y] = position(t);
+    return { x: x * box.w, y: y * box.h };
+  };
+  // The trail starts at the left edge on the baseline, then follows the
+  // plane's own path.
+  const start = { x: box.w * 0.035, y: box.h * 0.9 };
+  const steps = 80;
+  const points: Point[] = [start];
+  for (let i = 0; i <= steps; i++) points.push(at((seconds * i) / steps));
   const tip = points[points.length - 1];
-  const prev = points[points.length - 4] ?? points[0];
-  // Nose along the trail, but never steeper than a climbing plane.
+  const ahead = at(seconds + 0.25);
   const angle =
-    seconds > 0.05
-      ? Math.max(
-          -42,
-          Math.min(
-            -6,
-            (Math.atan2(tip.y - prev.y, tip.x - prev.x) * 180) / Math.PI,
-          ),
-        )
-      : -12;
+    (Math.atan2(ahead.y - tip.y, ahead.x - tip.x) * 180) / Math.PI || -20;
   const d =
     "M" + points.map((p) => p.x.toFixed(1) + " " + p.y.toFixed(1)).join(" L");
-  return { d, tip, angle };
+  return {
+    d,
+    tip,
+    angle,
+    frame: { left: box.w * 0.035, base: box.h * 0.9 },
+  };
 }
 
-// Stars at fixed pseudo-random positions so server and client agree.
-const stars = Array.from({ length: 46 }, (_, i) => {
+// Stars at fixed pseudo-random spots (as fractions of the panel).
+const stars = Array.from({ length: 56 }, (_, i) => {
   const r = (n: number) =>
-    (Math.sin(i * 12.9898 + n * 78.233) * 43758.5453) % 1;
-  return {
-    x: Math.abs(r(1)) * W,
-    y: Math.abs(r(2)) * (base - 20),
-    s: 0.6 + Math.abs(r(3)) * 1.3,
-    o: 0.25 + Math.abs(r(4)) * 0.55,
-  };
+    Math.abs((Math.sin(i * 12.9898 + n * 78.233) * 43758.5453) % 1);
+  return { x: r(1), y: r(2), s: 0.5 + r(3) * 1.4, o: 0.25 + r(4) * 0.55 };
 });
 
 /** Active flight time, smoothed between server answers. */
@@ -113,13 +129,42 @@ function useFlightClock(reward: PaperReward, holdingSince: number | null) {
   return value;
 }
 
-function Plane({ x, y, angle }: { x: number; y: number; angle: number }) {
+function Plane({
+  x,
+  y,
+  angle,
+  moving,
+  exit,
+  size,
+}: {
+  x: number;
+  y: number;
+  angle: number;
+  moving: boolean;
+  /** 0–1 while it flies off at the end. */
+  exit: number;
+  size: number;
+}) {
+  // A light bob while airborne, so it flies rather than slides.
+  const now = moving ? performance.now() : 0;
+  const bob = moving ? Math.sin(now / 190) * 2 : 0;
+  const bank = moving ? Math.sin(now / 280) * 1.8 : 0;
+  // It leaves towards the top right, whatever the trail was doing.
+  const dx = Math.cos((-38 * Math.PI) / 180) * exit * size * 7;
+  const dy = Math.sin((-38 * Math.PI) / 180) * exit * size * 7;
+  const scale = size / 120;
+  // Keep the plane's own upward tilt and only lean a little with the path.
+  const lean = (angle + 35) * 0.35;
   return (
-    <g transform={`translate(${x} ${y}) rotate(${angle})`}>
-      <g transform="translate(-34 -20)">
-        <path d="M0 18 L68 0 L26 30 Z" fill="#ffffff" />
-        <path d="M26 30 L68 0 L34 42 Z" fill="#c7d2fe" />
-        <path d="M26 30 L34 42 L30 30 Z" fill="#a5b4fc" />
+    <g
+      transform={`translate(${x + dx} ${y + dy + bob}) rotate(${lean + bank}) scale(${scale})`}
+      opacity={1 - exit}
+    >
+      {/* A folded paper plane, nose up and right, centred on its body. */}
+      <g transform="translate(-68 -64)" filter="url(#pp-plane-glow)">
+        <path d="M2 52 L118 6 L92 112 Z" fill="#ffffff" />
+        <path d="M44 74 L118 6 L60 118 Z" fill="#dfe6f7" />
+        <path d="M44 74 L60 118 L62 92 Z" fill="#aab6d6" />
       </g>
     </g>
   );
@@ -132,6 +177,7 @@ export function PaperPlane({
   error,
   send,
   onClose,
+  onReplay,
 }: {
   reward: PaperReward;
   signedIn: boolean;
@@ -139,6 +185,8 @@ export function PaperPlane({
   error: string;
   send: (action: string, target?: number | null) => void;
   onClose: () => void;
+  /** Watch another ad for a new flight after a miss. */
+  onReplay?: () => void;
 }) {
   // When the checkpoint hold began, for the 10-second decision bar.
   const [holdStart, setHoldStart] = useState<number | null>(null);
@@ -150,7 +198,24 @@ export function PaperPlane({
   const active = useFlightClock(reward, holdStart);
   const seconds = active / 1000;
   const live = Math.min(flightCap, Math.max(1, liveOffer(active)));
-  const { d, tip, angle } = useMemo(() => flightPath(seconds), [seconds]);
+  const panel = useRef<HTMLElement>(null);
+  const [box, setBox] = useState<Box>({ w: 800, h: 500 });
+  useEffect(() => {
+    const element = panel.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width: w, height: h } = entry.contentRect;
+      if (w > 0 && h > 0) setBox({ w, h });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const {
+    d,
+    tip,
+    angle,
+    frame: f,
+  } = useMemo(() => flightPath(seconds, box), [seconds, box]);
 
   const state = reward.state;
   const payout = reward.payout ?? 0;
@@ -158,6 +223,36 @@ export function PaperPlane({
   const missed = state === "missed";
   const final = reward.finalAmount;
   const holding = state === "flying" && reward.checkpoint;
+  // Show the tap at once; the server decides whether it was in time.
+  const [collecting, setCollecting] = useState(false);
+  const [lateTap, setLateTap] = useState(false);
+  useEffect(() => {
+    if (state !== "flying") setCollecting(false);
+    if (state === "missed" && collecting) setLateTap(true);
+    if (state === "ready" || state === "choose") setLateTap(false);
+    // Only on a state change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+  const moving = (state === "flying" && !holding) || (banked && final === null);
+  // When the flight ends, the plane carries on off the top right and fades.
+  const ended = final !== null && (missed || banked);
+  const [exitStart, setExitStart] = useState<number | null>(null);
+  const [exit, setExit] = useState(0);
+  useEffect(() => {
+    if (!ended) {
+      setExitStart(null);
+      setExit(0);
+      return;
+    }
+    const start = performance.now();
+    setExitStart(start);
+    let frame = requestAnimationFrame(function tick() {
+      const p = Math.min(1, (performance.now() - start) / 900);
+      setExit(p * p);
+      if (p < 1) frame = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [ended]);
   const heat = Math.min(1, Math.log(live) / Math.log(120));
   const tone = missed ? "missed" : banked ? "banked" : "flight";
   const trail =
@@ -176,11 +271,12 @@ export function PaperPlane({
   }, [holdStart]);
 
   return (
-    <div className="grid min-h-0 md:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="grid min-h-0 md:grid-cols-[minmax(0,1fr)_21rem]">
       {/* Flight panel */}
       <section
+        ref={panel}
         aria-label="Paper plane flight"
-        className="relative isolate aspect-[16/10] overflow-hidden text-white select-none md:aspect-auto md:min-h-[26rem]"
+        className="relative isolate aspect-[1.57] overflow-hidden text-white select-none"
       >
         <div className="absolute inset-0 bg-[radial-gradient(120%_100%_at_10%_100%,#2547c4_0%,#0e1d5c_55%,#091235_100%)]" />
         <div
@@ -199,8 +295,7 @@ export function PaperPlane({
         <div className="absolute inset-0 bg-[repeating-conic-gradient(from_-90deg_at_9%_88%,rgb(255_255_255/0.07)_0deg_3deg,transparent_3deg_9deg)] [mask-image:radial-gradient(85%_90%_at_9%_88%,black,transparent)]" />
 
         <svg
-          viewBox={`0 0 ${W} ${H}`}
-          preserveAspectRatio="xMinYMax slice"
+          viewBox={`0 0 ${box.w} ${box.h}`}
           className="absolute inset-0 size-full"
           aria-hidden="true"
         >
@@ -208,33 +303,74 @@ export function PaperPlane({
             <filter id="pp-glow" x="-20%" y="-20%" width="140%" height="140%">
               <feGaussianBlur stdDeviation="4" />
             </filter>
+            <filter
+              id="pp-plane-glow"
+              x="-40%"
+              y="-40%"
+              width="180%"
+              height="180%"
+            >
+              <feGaussianBlur in="SourceAlpha" stdDeviation="9" />
+              <feFlood floodColor="#ffffff" floodOpacity="0.45" />
+              <feComposite operator="in" in2="SourceAlpha" />
+              <feGaussianBlur stdDeviation="6" />
+              <feMerge>
+                <feMergeNode />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id="pp-soft" x="-50%" y="-10%" width="200%" height="120%">
+              <feGaussianBlur stdDeviation="14" />
+            </filter>
+            <linearGradient id="pp-beam" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#fff" stopOpacity="0.1" />
+              <stop offset="1" stopColor="#fff" stopOpacity="0" />
+            </linearGradient>
           </defs>
-          {stars.map((s, i) => (
-            <circle
-              key={i}
-              cx={s.x}
-              cy={s.y}
-              r={s.s}
-              fill="#fff"
-              opacity={s.o}
+          {stars.map((star, i) => {
+            // Stars stream back and down faster as the plane speeds up;
+            // bigger (nearer) stars move more.
+            const travel = Math.pow(seconds, 1.55) * 55 * (0.35 + star.s / 2);
+            const x = (((star.x * box.w - travel) % box.w) + box.w) % box.w;
+            const y = (star.y * box.h + travel * 0.45) % box.h;
+            return (
+              <circle
+                key={i}
+                cx={x}
+                cy={y}
+                r={star.s}
+                fill="#fff"
+                opacity={star.o}
+              />
+            );
+          })}
+          <line
+            x1={f.left}
+            y1={box.h * 0.06}
+            x2={f.left}
+            y2={f.base}
+            stroke="#fff"
+            strokeOpacity="0.12"
+          />
+          <line
+            x1={f.left}
+            y1={f.base}
+            x2={box.w - 16}
+            y2={f.base}
+            stroke="#fff"
+            strokeOpacity="0.12"
+          />
+          {seconds > 0.6 && exit < 1 && (
+            <rect
+              x={tip.x - box.w * 0.06}
+              y={tip.y}
+              width={box.w * 0.12}
+              height={Math.max(0, f.base - tip.y)}
+              fill="url(#pp-beam)"
+              filter="url(#pp-soft)"
+              opacity={(1 - exit) * 0.8}
             />
-          ))}
-          <line
-            x1={left}
-            y1={30}
-            x2={left}
-            y2={base}
-            stroke="#fff"
-            strokeOpacity="0.12"
-          />
-          <line
-            x1={left}
-            y1={base}
-            x2={W - 20}
-            y2={base}
-            stroke="#fff"
-            strokeOpacity="0.12"
-          />
+          )}
           {seconds > 0 && (
             <>
               <path
@@ -254,12 +390,19 @@ export function PaperPlane({
               />
             </>
           )}
-          {!(missed && final !== null) && (
-            <Plane x={tip.x} y={tip.y} angle={angle} />
-          )}
+          {exitStart === null || exit < 1 ? (
+            <Plane
+              x={tip.x}
+              y={tip.y}
+              angle={angle}
+              moving={moving}
+              exit={exit}
+              size={Math.max(46, box.w * 0.085)}
+            />
+          ) : null}
         </svg>
 
-        <p className="absolute top-4 left-[9%] m-0 text-xs text-white/60">
+        <p className="absolute top-4 left-[8%] m-0 text-xs text-white/60">
           max {flightCap.toLocaleString("en")} pts
         </p>
 
@@ -485,11 +628,13 @@ export function PaperPlane({
                   </span>
                 </p>
                 <p className="m-0 text-xs text-muted">
-                  {missed
-                    ? "Your points are unchanged."
-                    : final !== null && final > payout
-                      ? "It kept flying for a while. You could have risked it."
-                      : "Saved to your wallet."}
+                  {missed && lateTap
+                    ? `Your tap arrived just after it flew away at ${final ?? live} pts. Your points are unchanged.`
+                    : missed
+                      ? "Your points are unchanged."
+                      : final !== null && final > payout
+                        ? "It kept flying for a while. You could have risked it."
+                        : "Saved to your wallet."}
                 </p>
               </div>
             )}
@@ -509,10 +654,17 @@ export function PaperPlane({
                 <Button
                   size="lg"
                   className="w-full bg-success font-semibold text-white"
-                  isDisabled={busy}
-                  onPress={() => send("bank")}
+                  isDisabled={busy || collecting}
+                  onPress={() => {
+                    setCollecting(true);
+                    send("bank");
+                  }}
                 >
-                  {holding ? `Collect · ${flightCheckpoint} pts` : "Collect"}
+                  {collecting
+                    ? "Collecting…"
+                    : holding
+                      ? `Collect · ${flightCheckpoint} pts`
+                      : "Collect"}
                 </Button>
               )}
               {holding && (
@@ -520,14 +672,24 @@ export function PaperPlane({
                   size="lg"
                   variant="secondary"
                   className="w-full"
-                  isDisabled={busy}
+                  isDisabled={busy || collecting}
                   onPress={() => send("continue")}
                 >
                   Fly on
                 </Button>
               )}
+              {missed && onReplay && (
+                <Button size="lg" className="w-full" onPress={onReplay}>
+                  Watch an ad to fly again
+                </Button>
+              )}
               {(banked || missed) && (
-                <Button size="lg" className="w-full" onPress={onClose}>
+                <Button
+                  size="lg"
+                  className="w-full"
+                  variant={missed && onReplay ? "secondary" : "primary"}
+                  onPress={onClose}
+                >
                   Back to report
                 </Button>
               )}

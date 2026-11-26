@@ -11,10 +11,13 @@ export function RewardModal({
   rewardId,
   signedIn,
   onClose,
+  onReplay,
 }: {
   rewardId: string | null;
   signedIn: boolean;
   onClose: () => void;
+  /** Start another rewarded ad for a new flight. */
+  onReplay?: () => void;
 }) {
   const [reward, setReward] = useState<PaperReward | null>(null);
   const [failed, setFailed] = useState(false);
@@ -68,7 +71,7 @@ export function RewardModal({
     (reward?.state === "banked" && reward.finalAmount === null);
   useEffect(() => {
     if (!polling || busy) return;
-    const timer = setInterval(() => void send("status"), 200);
+    const timer = setInterval(() => void send("status"), 120);
     return () => clearInterval(timer);
   }, [polling, busy, send]);
 
@@ -88,7 +91,7 @@ export function RewardModal({
       <Modal.Container size="lg" placement="center">
         <Modal.Dialog
           aria-label="Paper plane reward"
-          className="overflow-hidden p-0 sm:max-w-[min(62rem,calc(100vw-2rem))]"
+          className="overflow-hidden p-0 sm:max-w-[min(68rem,calc(100vw-2rem))]"
         >
           <Modal.CloseTrigger aria-label="Close" className="z-10" />
           {reward ? (
@@ -99,6 +102,7 @@ export function RewardModal({
               error={error}
               send={(action, target) => void send(action, target)}
               onClose={close}
+              onReplay={onReplay}
             />
           ) : failed ? (
             <p className="m-0 p-8 text-sm text-muted">
