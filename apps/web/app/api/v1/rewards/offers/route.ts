@@ -21,8 +21,10 @@ const body = z.discriminatedUnion("action", [
     action: z.literal("reserve"),
     host: domain,
     scanId: z.uuid(),
-    offer: z.enum(["unlock", "points", "flight", "choice"]),
+    offer: z.enum(["unlock", "flight", "choice"]),
   }),
+  // A flight earned on the points page, tied to no report.
+  z.object({ action: z.literal("reserveFlight") }),
   z.object({
     action: z.literal("spend"),
     host: domain,
@@ -33,7 +35,6 @@ const body = z.discriminatedUnion("action", [
     action: z.enum([
       "status",
       "open",
-      "choosePoints",
       "chooseFlight",
       "launch",
       "bank",
@@ -58,6 +59,14 @@ export async function POST(request: Request) {
       actor,
     );
     if (!id) return new Response(null, { status: 404 });
+    const response = NextResponse.json({ id }, { headers: privateHeaders });
+    rememberBrowser(response, raw);
+    return response;
+  }
+  if (params.action === "reserveFlight") {
+    const { actor, raw } = await pointActor();
+    const id = await database.createFlightOffer(actor);
+    if (!id) return new Response(null, { status: 401 });
     const response = NextResponse.json({ id }, { headers: privateHeaders });
     rememberBrowser(response, raw);
     return response;

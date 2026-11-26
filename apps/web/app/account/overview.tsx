@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { buttonVariants } from "@heroui/styles";
 import type { ReactNode } from "react";
 import { database } from "../../lib/reports";
 import { proPlansPath } from "../../lib/checkout-return";
@@ -135,6 +136,18 @@ export async function AccountOverview({
         />
       </div>
 
+      {wallet && (
+        <div className="-mt-4 flex flex-wrap gap-2">
+          <Link
+            href="/account/rewards#fly"
+            className={buttonVariants({ size: "sm", className: "gap-2" })}
+          >
+            <AccountIcon name="rewards" />
+            Get more points
+          </Link>
+        </div>
+      )}
+
       {wallet && wallet.tickets.length > 0 && (
         <section
           aria-label="Waiting flights"
@@ -150,10 +163,16 @@ export async function AccountOverview({
               <li key={ticket.id}>
                 <Link
                   className="inline-link"
-                  href={"/report/" + ticket.domain + "?reward=" + ticket.id}
+                  href={
+                    (ticket.domain
+                      ? "/report/" + ticket.domain
+                      : "/account/rewards") +
+                    "?reward=" +
+                    ticket.id
+                  }
                 >
-                  {ticket.state === "choose" ? "Choose reward" : "Fly"} ·{" "}
-                  {ticket.domain}
+                  {ticket.state === "choose" ? "Choose reward" : "Fly"}
+                  {ticket.domain && " · " + ticket.domain}
                 </Link>
               </li>
             ))}

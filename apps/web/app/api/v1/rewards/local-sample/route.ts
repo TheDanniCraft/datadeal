@@ -14,9 +14,10 @@ import { hasAdvancedSnapshotDetails } from "../../../../../lib/browser-summary";
 
 import { handlePointAction } from "../../../../../lib/point-offer";
 
+// A flight from the points page has no report: only its completion id.
 const requestBody = z.object({
-  host: domain,
-  scanId: z.uuid(),
+  host: domain.optional(),
+  scanId: z.uuid().optional(),
   completionId: z.uuid(),
 });
 const duration = 24 * 60 * 60;
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
   if (await database.reservedReportOffer(completionId)) {
     return handlePointAction(completionId, "complete", { host, scanId });
   }
+  if (!host || !scanId) return new Response(null, { status: 400 });
   // A new publication can arrive while the guest is watching the ad.
   const snapshots = await database.archivedReports(host, scanId, false);
   const offered = scanReport.safeParse(snapshots[0]?.report);

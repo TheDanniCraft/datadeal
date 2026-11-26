@@ -8,6 +8,8 @@ import { AccountScreen } from "../account-ui";
 import { RefreshWithPoints } from "./refresh-with-points";
 import { pointOperations as operations } from "./operations";
 import { LocalDate } from "../../../lib/local-date";
+import { RewardFromQuery } from "../../rewards/reward-modal";
+import { FlyForPoints } from "./fly-for-points";
 export default async function RewardsWallet() {
   if (!localPointsEnabled() || !database) notFound();
   const session = await auth?.api.getSession({ headers: await headers() });
@@ -28,6 +30,8 @@ export default async function RewardsWallet() {
           </span>
         </p>
       </div>
+      <FlyForPoints />
+      <RewardFromQuery signedIn />
       {wallet.tickets.length > 0 && (
         <section>
           <h2 className="text-xl">Your flights and rewards</h2>
@@ -36,14 +40,20 @@ export default async function RewardsWallet() {
               <li key={ticket.id} className="py-3">
                 <Link
                   className="inline-link"
-                  href={"/report/" + ticket.domain + "?reward=" + ticket.id}
+                  href={
+                    (ticket.domain
+                      ? "/report/" + ticket.domain
+                      : "/account/rewards") +
+                    "?reward=" +
+                    ticket.id
+                  }
                 >
                   {ticket.state === "ready"
                     ? "Launch flight"
                     : ticket.state === "choose"
                       ? "Choose reward"
                       : "Resume flight"}{" "}
-                  · {ticket.domain}
+                  {ticket.domain && "· " + ticket.domain}
                 </Link>
               </li>
             ))}

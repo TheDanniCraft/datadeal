@@ -489,19 +489,14 @@ export function PaperPlane({
               {(
                 [
                   [
-                    "chooseFlight",
-                    "Fly the paper plane",
-                    `1–${flightCap} points, or nothing if it flies away`,
-                  ],
-                  [
-                    "choosePoints",
-                    `Claim ${guaranteedPoints} points`,
-                    "Safe. Enough for one report unlock",
-                  ],
-                  [
                     "open",
                     "Keep this report",
                     `${reward.domain} stays in your account`,
+                  ],
+                  [
+                    "chooseFlight",
+                    "Or fly the paper plane",
+                    `1–${flightCap} points, or nothing if it flies away`,
                   ],
                 ] as const
               ).map(([action, title, text]) => (
@@ -535,7 +530,7 @@ export function PaperPlane({
                 className="inline-link text-sm"
                 href={"/account?returnTo=/rewards/" + reward.id}
               >
-                Sign in to keep the report, take points or fly
+                Sign in to keep the report or fly for points
               </Link>
             </div>
           )
@@ -547,7 +542,7 @@ export function PaperPlane({
                 : `The full report for ${reward.domain} is now in your account.`}
             </p>
             <Button size="lg" className="w-full" onPress={onClose}>
-              Back to report
+              {reward.domain ? "Back to report" : "Done"}
             </Button>
           </div>
         ) : (
@@ -684,7 +679,7 @@ export function PaperPlane({
                   Fly on
                 </Button>
               )}
-              {missed && onReplay && (
+              {(banked || missed) && onReplay && (
                 <Button size="lg" className="w-full" onPress={onReplay}>
                   Watch an ad to fly again
                 </Button>
@@ -693,13 +688,13 @@ export function PaperPlane({
                 <Button
                   size="lg"
                   className="w-full"
-                  variant={missed && onReplay ? "secondary" : "primary"}
+                  variant={onReplay ? "secondary" : "primary"}
                   onPress={onClose}
                 >
-                  Back to report
+                  {reward.domain ? "Back to report" : "Done"}
                 </Button>
               )}
-              {banked && (
+              {banked && reward.domain && (
                 <Link
                   className="inline-link text-center text-xs"
                   href="/account/rewards"

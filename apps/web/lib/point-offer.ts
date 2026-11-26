@@ -61,7 +61,6 @@ export async function handlePointAction(
     | "status"
     | "complete"
     | "open"
-    | "choosePoints"
     | "chooseFlight"
     | "launch"
     | "bank"
@@ -102,6 +101,7 @@ export async function handlePointAction(
       : NextResponse.json(reward, { headers: privateHeaders });
   if (
     reward.state === "unlocked" &&
+    reward.scanId &&
     (command === "open" || command === "complete")
   )
     response.cookies.set(localRewardCookie(reward.scanId), value, {

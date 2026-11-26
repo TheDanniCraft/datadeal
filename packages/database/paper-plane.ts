@@ -26,8 +26,8 @@ type State =
 type Actor = { userId: string | null; browserHash: string };
 type Offer = {
   id: string;
-  domain: string;
-  scan_id: string;
+  domain: string | null;
+  scan_id: string | null;
   user_id: string | null;
   browser_hash: string;
   offer: Choice;
@@ -41,7 +41,6 @@ type Offer = {
 type Command =
   | "complete"
   | "open"
-  | "choosePoints"
   | "chooseFlight"
   | "launch"
   | "continue"
@@ -158,6 +157,12 @@ export function paperPlaneStorage(sql: Sql) {
         return id;
       });
     },
+    async createFlightOffer(actor: Actor) {
+      if (!actor.userId) return null;
+      const id = randomUUID();
+      await sql`insert into report_reward_offers(id,user_id,browser_hash,offer) values(${id},${actor.userId},${actor.browserHash},'flight')`;
+      return id;
+    },
     async reportOfferAction(
       id: string,
       actor: Actor,
@@ -172,14 +177,15 @@ export function paperPlaneStorage(sql: Sql) {
       return sql.begin(async (tx) => {
         const [row] = await tx<
           Offer[]
-        >`select o.*,s.domain from report_reward_offers o join scans s on s.id=o.scan_id where o.id=${id} for update of o`;
+        >`select o.*,s.domain from report_reward_offers o left join scans s on s.id=o.scan_id where o.id=${id} for update of o`;
         if (!row) return { code: "missing" as const };
         if (
           (row.user_id
             ? row.user_id !== actor.userId
             : row.browser_hash !== actor.browserHash) ||
           (command === "complete" &&
-            (row.domain !== input.host || row.scan_id !== input.scanId))
+            ((row.domain ?? undefined) !== input.host ||
+              (row.scan_id ?? undefined) !== input.scanId))
         )
           return { code: "forbidden" as const };
         const now = Date.now();
@@ -189,7 +195,7 @@ export function paperPlaneStorage(sql: Sql) {
             (row.offer === "unlock" ||
               (row.offer === "choice" && Boolean(row.user_id)))) ||
             (command === "open" && row.state === "choose")) &&
-          !(await lockRewardableScan(tx, row.scan_id, row.domain))
+          !(await lockRewardableScan(tx, row.scan_id!, row.domain!))
         )
           return { code: "missing" as const };
         if (command === "complete" && row.state === "pending") {
@@ -210,7 +216,7 @@ export function paperPlaneStorage(sql: Sql) {
             if (!input.grantHash) throw Error("Missing browser grant");
             await grant(
               tx,
-              row.scan_id,
+              row.scan_id!,
               input.grantHash,
               row.user_id ?? actor.userId,
             );
@@ -225,23 +231,9 @@ export function paperPlaneStorage(sql: Sql) {
         if (command === "open" && row.state !== "unlocked") {
           if (row.state !== "choose" || !input.grantHash)
             return { code: "conflict" as const };
-          await grant(tx, row.scan_id, input.grantHash, actor.userId);
+          await grant(tx, row.scan_id!, input.grantHash, actor.userId);
           row.state = "unlocked";
           await tx`update report_reward_offers set state='unlocked',user_id=${actor.userId} where id=${id}`;
-        }
-        if (command === "choosePoints" && row.state !== "points") {
-          if (row.state !== "choose" || !actor.userId)
-            return { code: "conflict" as const };
-          await applyReportPoints(tx, {
-            userId: actor.userId,
-            delta: guaranteedPoints,
-            operation: "ad_points",
-            referenceId: id,
-          });
-          row.state = "points";
-          row.user_id = actor.userId;
-          row.payout = guaranteedPoints;
-          await tx`update report_reward_offers set state='points',payout=${row.payout},user_id=${row.user_id} where id=${id}`;
         }
         if (command === "chooseFlight" && row.state !== "ready") {
           if (row.state !== "choose" || !actor.userId)
@@ -277,7 +269,7 @@ export function paperPlaneStorage(sql: Sql) {
       const activity =
         await sql`select delta,operation,created_at from report_point_ledger where user_id=${userId} order by created_at,id`;
       const offers =
-        await sql`select s.domain,o.offer,o.state,o.created_at,o.completed_at,o.target,o.launched_at,o.payout from report_reward_offers o join scans s on s.id=o.scan_id where o.user_id=${userId} order by o.created_at,o.id`;
+        await sql`select s.domain,o.offer,o.state,o.created_at,o.completed_at,o.target,o.launched_at,o.payout from report_reward_offers o left join scans s on s.id=o.scan_id where o.user_id=${userId} order by o.created_at,o.id`;
       return { balance: balance?.balance ?? 0, activity, offers };
     },
     async reportPointWallet(userId: string) {
@@ -292,8 +284,8 @@ export function paperPlaneStorage(sql: Sql) {
           { id: string; delta: number; operation: string; created_at: Date }[]
         >`select id,delta,operation,created_at from report_point_ledger where user_id=${userId} order by created_at desc,id limit 30`;
         const tickets = await tx<
-          { id: string; domain: string; state: State }[]
-        >`select o.id,s.domain,o.state from report_reward_offers o join scans s on s.id=o.scan_id where o.user_id=${userId} and o.state in('choose','ready','flying') order by o.created_at desc`;
+          { id: string; domain: string | null; state: State }[]
+        >`select o.id,s.domain,o.state from report_reward_offers o left join scans s on s.id=o.scan_id where o.user_id=${userId} and o.state in('choose','ready','flying') order by o.created_at desc`;
         return { balance: Number(account?.balance ?? 0), activity, tickets };
       });
     },
