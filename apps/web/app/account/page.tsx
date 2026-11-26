@@ -14,6 +14,7 @@ import { DeleteAccount } from "./delete-account";
 import { PrivacyProfile } from "./privacy-profile";
 import { AccountIcon, AccountScreen } from "./account-ui";
 import { localOutboxName } from "./local-mail";
+import { AccountOverview } from "./overview";
 import { ItemCard } from "@heroui-pro/react/item-card";
 
 export default async function AccountPage({
@@ -97,54 +98,32 @@ export default async function AccountPage({
       description={"Signed in as " + session.user.email}
       current="/account"
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        {(
-          [
-            [
-              "/account/billing",
-              "billing",
-              "Billing and Pro",
-              "Manage your plan and subscription.",
-            ],
-            [
-              "/account/developer",
-              "developer",
-              "Developer API",
-              "Manage your tokens and credit activity.",
-            ],
-          ] as const
-        ).map(([href, icon, label, detail]) => (
-          <Link href={href} key={href}>
-            <ItemCard className="h-full">
-              <ItemCard.Icon>
-                <AccountIcon name={icon} />
-              </ItemCard.Icon>
-              <ItemCard.Content>
-                <ItemCard.Title>{label}</ItemCard.Title>
-                <ItemCard.Description className="whitespace-normal">
-                  {detail}
-                </ItemCard.Description>
-              </ItemCard.Content>
-            </ItemCard>
-          </Link>
-        ))}
-      </div>
-      {localPointsEnabled() && (
-        <Link className="inline-link" href="/account/rewards">
-          Report points and flights
-        </Link>
-      )}
+      <AccountOverview userId={session.user.id} points={localPointsEnabled()} />
+      <h2 className="border-t border-separator pt-8 text-lg font-semibold tracking-tight">
+        Settings
+      </h2>
+      <Link href="/account/developer" className="block">
+        <ItemCard className="hover:bg-surface-secondary">
+          <ItemCard.Icon>
+            <AccountIcon name="developer" />
+          </ItemCard.Icon>
+          <ItemCard.Content>
+            <ItemCard.Title>Developer API</ItemCard.Title>
+            <ItemCard.Description className="whitespace-normal">
+              Tokens and credit activity for the DataDeal API.
+            </ItemCard.Description>
+          </ItemCard.Content>
+        </ItemCard>
+      </Link>
       {profile && (
         <section className="space-y-3" aria-label="Privacy profile">
-          <h2 className="text-xl font-semibold tracking-tight">
-            Privacy profile
-          </h2>
+          <h3 className="text-base font-semibold">Privacy profile</h3>
           <PrivacyProfile saved={profile} />
         </section>
       )}
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold tracking-tight">Account data</h2>
-        <p>
+        <h3 className="text-base font-semibold">Account data</h3>
+        <p className="text-sm text-muted">
           Your download includes your profile, Pro billing records, unlocked
           reports and API credit activity.
         </p>
@@ -156,7 +135,7 @@ export default async function AccountPage({
         </a>
       </section>
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold tracking-tight">Account access</h2>
+        <h3 className="text-base font-semibold">Account access</h3>
         <AccountForm signedIn />
         <DeleteAccount localOutbox={outbox} />
       </section>

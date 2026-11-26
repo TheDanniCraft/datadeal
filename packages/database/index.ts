@@ -518,22 +518,29 @@ export function connect(url: string, { reusePool = false } = {}) {
             and state in ('completed', 'partially_completed')
           order by domain, requested_at desc, id desc
         ) latest order by requested_at desc, domain limit 20`;
-      return rows.flatMap(({ snapshot, ...row }) => {
-        const parsed = scanReport.safeParse(snapshot);
-        if (!parsed.success) return [];
-        const { rating, scenario } = evaluateHeadline(parsed.data);
-        return [
-          {
-            ...row,
-            score: rating.score,
-            grade: rating.grade,
-            headlineScenario: scenario,
-            ...(rating.noChoiceEvidence && { noChoiceVisit: true }),
-            hasFavicon: Boolean(parsed.data.favicon),
-            signals: reportSignals(parsed.data, rating),
-          },
-        ];
-      });
+      return rated(rows);
+    },
+    /** The latest published rating of each domain, in the order given. */
+    async latestReports(domains: string[]) {
+      if (!domains.length) return [];
+      const rows = await sql<
+        { domain: string; scanId: string; snapshot: unknown }[]
+      >`
+        select distinct on (domain) domain, id as "scanId", report as snapshot
+        from scans where domain = any(${domains})
+          and report->'demo' = 'false'::jsonb
+          and state in ('completed', 'partially_completed')
+        order by domain, requested_at desc, id desc`;
+      const found = rated(rows);
+      return domains.flatMap((name) => found.filter((r) => r.domain === name));
+    },
+    /** Sites whose advanced report this account unlocked, newest first. */
+    async unlockedDomains(userId: string) {
+      const rows = await sql<{ domain: string }[]>`
+        select s.domain from scan_reward_grants g join scans s on s.id = g.scan_id
+        where g.user_id = ${userId}
+        group by s.domain order by max(g.id) desc limit 24`;
+      return rows.map((row) => row.domain);
     },
     async observedProviderReferences(input: string) {
       const provider = domain.parse(input);
@@ -1180,3 +1187,22 @@ export function connect(url: string, { reusePool = false } = {}) {
   };
 }
 export type { PaperReward } from "./paper-plane";
+
+function rated(rows: { domain: string; scanId: string; snapshot: unknown }[]) {
+  return rows.flatMap(({ snapshot, ...row }) => {
+    const parsed = scanReport.safeParse(snapshot);
+    if (!parsed.success) return [];
+    const { rating, scenario } = evaluateHeadline(parsed.data);
+    return [
+      {
+        ...row,
+        score: rating.score,
+        grade: rating.grade,
+        headlineScenario: scenario,
+        ...(rating.noChoiceEvidence && { noChoiceVisit: true }),
+        hasFavicon: Boolean(parsed.data.favicon),
+        signals: reportSignals(parsed.data, rating),
+      },
+    ];
+  });
+}
