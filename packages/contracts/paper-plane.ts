@@ -4,6 +4,8 @@ export const guaranteedPoints = 50;
 // half the time), so one flight buys a bit less than one report.
 export const defaultReportPointCost = 150;
 export const defaultRefreshPointCost = 150;
+/** Moves a waiting scan to the front of the queue: 1.5x a normal action. */
+export const queueBoostCost = 225;
 // Surviving flights pause here once so the player can bank or fly on
 // (the reference recording paused at 36).
 export const flightCheckpoint = 50;

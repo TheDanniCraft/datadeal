@@ -42,6 +42,8 @@ import {
 } from "./api-credits";
 import * as schema from "./schema";
 export { applyReportPoints } from "./report-points";
+import { applyReportPoints } from "./report-points";
+import { queueBoostCost } from "@datadeal/contracts/paper-plane";
 import { paperPlaneStorage } from "./paper-plane";
 import { postgresScanArtifacts } from "./scan-artifacts";
 import { scanRewardStorage } from "./scan-rewards";
@@ -730,6 +732,7 @@ export function connect(url: string, { reusePool = false } = {}) {
           from scan_jobs j join scans s on s.id = j.scan_id
           where j.lease_until is null or j.lease_until < now()
           order by case
+            when j.boosted then -1
             when s.requested_at <= now() - interval '10 minutes' then 0
             when j.priority then 1
             when exists (
@@ -838,6 +841,7 @@ export function connect(url: string, { reusePool = false } = {}) {
       const [row] = await sql<{ position: number }[]>`
         with waiting as (
           select s.id, row_number() over (order by case
+            when j.boosted then -1
             when s.requested_at <= now() - interval '10 minutes' then 0
             when j.priority then 1
             when exists (
@@ -852,6 +856,25 @@ export function connect(url: string, { reusePool = false } = {}) {
         )
         select position from waiting where id = ${id}`;
       return row?.position ?? null;
+    },
+    /** Spend report points to move a waiting scan to the front of the queue. */
+    async boostScan(userId: string, scanId: string) {
+      return sql.begin(async (tx) => {
+        const [job] = await tx<{ boosted: boolean; running: boolean }[]>`
+          select boosted, (owner is not null and lease_until > now()) as running
+          from scan_jobs where scan_id = ${scanId} for update`;
+        if (!job || job.running) return "not_waiting" as const;
+        if (job.boosted) return "already_boosted" as const;
+        const debit = await applyReportPoints(tx, {
+          userId,
+          delta: -queueBoostCost,
+          operation: "queue_boost",
+          referenceId: scanId,
+        });
+        if (debit === "insufficient") return "insufficient" as const;
+        await tx`update scan_jobs set boosted = true where scan_id = ${scanId}`;
+        return "boosted" as const;
+      });
     },
     async activeScanStages(id: string) {
       const [job] = await sql`select stages from scan_jobs where scan_id = ${id}

@@ -21,6 +21,7 @@ import { ConsentTable } from "./consent-table";
 import { ScanProgress } from "./scan-progress";
 import { ProviderDisclosure } from "../../data-flow/provider-lookup";
 import { RewardedAdTest } from "./rewarded-ad-test";
+import { BoostScan } from "./boost-scan";
 import { LocalDate, useTimeZone } from "../../../lib/local-date";
 import { useClientReady } from "../../use-client-ready";
 import type { publicPolicyHighlights } from "../../../lib/policy-highlights";
@@ -1937,6 +1938,7 @@ export function ReportContent({
   current,
   blocked = false,
   queuePosition,
+  boost,
   browserScan,
   activeStages,
   previousRewardedScan,
@@ -1977,6 +1979,8 @@ export function ReportContent({
   blocked?: boolean;
   /** 1 = next to start, while the scan waits. */
   queuePosition?: number;
+  /** Report points to skip the scan queue, for signed-in visitors. */
+  boost?: { scanId: string; balance: number };
   /** Set when the site blocks the scanner: run it in a visitor's browser. */
   browserScan?: {
     signedIn: boolean;
@@ -2885,6 +2889,11 @@ export function ReportContent({
                     ? `A new scan is queued: number ${queuePosition} in line.`
                     : "A new scan is queued."
                 : "A scan is running."}
+              {boost && current === "queued" && (queuePosition ?? 0) > 1 && (
+                <span className="mt-2 block">
+                  <BoostScan {...boost} />
+                </span>
+              )}
             </p>
           )}
           {hasUsableReport && current === "failed" && (
@@ -3026,6 +3035,11 @@ export function ReportContent({
                         ? "DataDeal couldn’t verify enough about how this site handles personal data."
                         : "Run a scan to see how this website handles your data."}
               </EmptyState.Description>
+              {boost && current === "queued" && (queuePosition ?? 0) > 1 && (
+                <div className="mt-3 flex justify-center">
+                  <BoostScan {...boost} />
+                </div>
+              )}
             </EmptyState.Header>
             <EmptyState.Content hidden={scanActive}>
               {scanAction}

@@ -458,6 +458,11 @@ export default async function ReportPage({
         }
         blocked={blockedScan}
         queuePosition={queuePosition ?? undefined}
+        boost={
+          session && !pro && localPointsEnabled() && current === "queued"
+            ? { scanId: history[0].id, balance: pointBalance }
+            : undefined
+        }
         browserScan={
           blockedScan
             ? {
