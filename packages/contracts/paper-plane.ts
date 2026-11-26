@@ -2,7 +2,9 @@ export const flightCap = 1000;
 export const guaranteedPoints = 50;
 export const defaultReportPointCost = 50;
 export const defaultRefreshPointCost = 50;
-export const flightCheckpoint = 36;
+// Surviving flights pause here once so the player can bank or fly on. 50
+// is exactly one report unlock (the reference recording paused at 36).
+export const flightCheckpoint = 50;
 const growthPerSecond = 0.59085;
 
 export function survivalProbability(target: number) {

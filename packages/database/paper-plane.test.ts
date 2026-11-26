@@ -141,7 +141,7 @@ it.skipIf(!url)(
         (await db.reportOfferAction(choice, actor, "status")).reward,
       ).toMatchObject({
         state: "flying",
-        live: 36,
+        live: 50,
         checkpoint: true,
         finalAmount: null,
       });

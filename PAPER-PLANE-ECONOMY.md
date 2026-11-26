@@ -14,7 +14,7 @@ The proposed volunteer pilot would award **25 points per verified contribution**
 
 The three selected flights ended at **3, 93 and 236**. The median endpoint was **93**, while the amounts actually banked were **0, 90 and 81**, with a median payout of **81**. The original rewards were seconds removed from a wait. For scale, a DataDeal flight paying 81 points would cover one 50-point action and leave 31 points. Three selected examples cannot predict a typical DataDeal payout. A separate mention of 31 in the handoff has no confirmed outcome type. The earlier uniform model had 360 losing thresholds plus one cap win. Under that assumption collecting at 90 succeeds on 271/361 draws and yields about 67.6 units per attempt. It was a hypothetical pilot, and its three-attempt variant changes those odds again.
 
-The timing CSV supports an accelerating offer of approximately `exp(0.59085 × active flight seconds)`. The recording pauses at 36. After taking 81 the player sees the receipt immediately while the animation continues to 236. Preserve those distinct banked and final amounts. For DataDeal display points, keep a single draw through pauses, and allow an automatic bank target before launch for keyboard, mobile and reduced-motion users.
+The timing CSV supports an accelerating offer of approximately `exp(0.59085 × active flight seconds)`. The recording pauses at 36; DataDeal pauses at 50, exactly one report unlock. After taking 81 the player sees the receipt immediately while the animation continues to 236. Preserve those distinct banked and final amounts. For DataDeal display points, keep a single draw through pauses, and allow an automatic bank target before launch for keyboard, mobile and reduced-motion users.
 
 ## Local development balance
 
@@ -23,14 +23,13 @@ Use a single continuous offer with a maximum of 1,000 points. The local pilot gi
 | Choice                   | Active seconds | Chance to bank | Reports affordable from an empty wallet on success | Mean points per ad |
 | ------------------------ | -------------: | -------------: | -------------------------------------------------: | -----------------: |
 | Guaranteed points        |      Immediate |           100% |                                                  1 |               50.0 |
-| Collect 36 at checkpoint |           6.07 |          72.4% |                                   0, with 36 saved |               26.1 |
-| Collect 50               |           6.62 |          64.5% |                                                  1 |               32.3 |
+| Collect 50 at checkpoint |           6.62 |          64.5% |                                                  1 |               32.3 |
 | Collect 100              |           7.79 |          44.7% |                                                  2 |               44.7 |
 | Collect 200              |           8.97 |          25.1% |                                                  4 |               50.3 |
 | Collect 500              |          10.52 |           8.2% |                                                 10 |               40.9 |
 | Reach cap of 1,000       |          11.69 |           2.8% |                                                 20 |               27.8 |
 
-**Example.** For one report today, take the guaranteed unlock. A player trying for two reports can choose 100 in advance. That target succeeds about 45 times per 100 flights. At the 36-point checkpoint, a player still in the air has about a 62% conditional chance of reaching 100. Banking 36 there immediately adds 36 to the wallet. Continuing and missing adds zero. Previous earnings are always retained.
+**Example.** For one report today, take the guaranteed unlock. A player trying for two reports can choose 100 in advance. That target succeeds about 45 times per 100 flights. At the 50-point checkpoint, a player still in the air has about a 69% conditional chance of reaching 100. Banking 50 there immediately adds 50 to the wallet, enough for one report. Continuing and missing adds zero. Previous earnings are always retained.
 
 For reproducibility, draw one uniform `U` in (0, 1), then set `T = 1 + 200 × (1 / sqrt(U) − 1)`. The uncapped flight ends at continuous offer T. A target succeeds strictly before T. If T exceeds 1,000 the server automatically banks 1,000 at the cap. No collect can exceed the floored live offer. A simulation with 100,000 draws reached 36 / 50 / 100 / 200 / 500 / 1,000 on 72,498 / 64,634 / 44,698 / 25,034 / 8,128 / 2,722 flights. Its median maximum reachable offer was 83. To repeat it, initialize `s = 20261125`, advance `s = (1664525 × s + 1013904223) mod 2³²` per draw, and use `U = (s + 0.5) / 2³²`. The local pilot uses cryptographic randomness and a server-authoritative clock. These illustrative odds assume no endpoint clues and exclude manual timing and network delay. The timing beyond the recorded endpoint is extrapolated.
 

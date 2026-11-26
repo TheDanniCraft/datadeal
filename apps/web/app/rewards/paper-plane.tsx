@@ -271,12 +271,12 @@ export function PaperPlane({
   }, [holdStart]);
 
   return (
-    <div className="grid min-h-0 md:grid-cols-[minmax(0,1fr)_21rem]">
+    <div className="grid min-h-0 md:min-h-[30rem] md:grid-cols-[minmax(0,1fr)_21rem]">
       {/* Flight panel */}
       <section
         ref={panel}
         aria-label="Paper plane flight"
-        className="relative isolate aspect-[1.57] overflow-hidden text-white select-none"
+        className="relative isolate aspect-[1.57] overflow-hidden text-white select-none md:aspect-auto md:h-full"
       >
         <div className="absolute inset-0 bg-[radial-gradient(120%_100%_at_10%_100%,#2547c4_0%,#0e1d5c_55%,#091235_100%)]" />
         <div
