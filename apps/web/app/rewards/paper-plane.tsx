@@ -591,26 +591,32 @@ export function PaperPlane({
             {(banked || missed) && (
               <div className="grid gap-2 text-sm">
                 {banked && (
-                  <div className="relative h-1.5 rounded-full bg-default">
-                    <div
-                      className="absolute inset-y-0 left-0 rounded-full bg-success"
-                      style={{
-                        width:
-                          (Math.log(Math.max(1, payout)) /
-                            Math.log(flightCap)) *
-                            100 +
-                          "%",
-                      }}
-                    />
-                    <div
-                      className="absolute top-1/2 size-2.5 -translate-1/2 rounded-full bg-accent"
-                      style={{
-                        left:
-                          (Math.log(final ?? live) / Math.log(flightCap)) *
-                            100 +
-                          "%",
-                      }}
-                    />
+                  <div className="grid gap-1">
+                    {/* Linear 0–cap: green is what you kept, the lighter band
+                        how much further the plane went, the dot where it ended. */}
+                    <div className="relative h-1.5 rounded-full bg-default">
+                      <div
+                        className="absolute inset-y-0 rounded-full bg-accent/35"
+                        style={{
+                          left: 0,
+                          width: ((final ?? live) / flightCap) * 100 + "%",
+                        }}
+                      />
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-full bg-success"
+                        style={{ width: (payout / flightCap) * 100 + "%" }}
+                      />
+                      <div
+                        className="absolute top-1/2 size-2.5 -translate-1/2 rounded-full bg-accent ring-2 ring-surface"
+                        style={{
+                          left: ((final ?? live) / flightCap) * 100 + "%",
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[.7rem] text-muted tabular-nums">
+                      <span>0</span>
+                      <span>{flightCap}</span>
+                    </div>
                   </div>
                 )}
                 {banked && (
