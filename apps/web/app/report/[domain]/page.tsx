@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { RewardFromQuery } from "../../rewards/reward-modal";
 import { cookies, headers } from "next/headers";
 
 import { auth } from "../../../lib/auth";
@@ -381,6 +383,11 @@ export default async function ReportPage({
   );
   return (
     <article className="privacy-report mx-auto w-full max-w-[50rem] py-6 sm:py-9">
+      {localPointsEnabled() && (
+        <Suspense fallback={null}>
+          <RewardFromQuery signedIn={Boolean(session)} />
+        </Suspense>
+      )}
       <ReportContent
         proFeatures={
           advanced

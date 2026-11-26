@@ -39,7 +39,10 @@ export default async function RewardsWallet() {
           <ul className="divide-y divide-separator">
             {wallet.tickets.map((ticket) => (
               <li key={ticket.id} className="py-3">
-                <Link className="inline-link" href={"/rewards/" + ticket.id}>
+                <Link
+                  className="inline-link"
+                  href={"/report/" + ticket.domain + "?reward=" + ticket.id}
+                >
                   {ticket.state === "ready"
                     ? "Launch flight"
                     : ticket.state === "choose"

@@ -13,6 +13,7 @@ import {
 } from "@heroui/react";
 import { ReportIcon } from "./report-icon";
 import { useCallback, useEffect, useState } from "react";
+import { RewardModal } from "../../rewards/reward-modal";
 import {
   publisherScript,
   configurePublisherPrivacy,
@@ -71,6 +72,7 @@ function TestOffer({
   const [unavailable, setUnavailable] = useState(false);
   const [retryId, setRetryId] = useState<string>();
   const [notice, setNotice] = useState("");
+  const [rewardId, setRewardId] = useState<string | null>(null);
   const saveReward = useCallback(
     async (completionId: string) => {
       setRetryId(undefined);
@@ -87,7 +89,9 @@ function TestOffer({
         if (response.status === 204) window.location.reload();
         else {
           const reward = await response.json();
-          window.location.assign("/rewards/" + reward.id);
+          setSaving(false);
+          setNotice("");
+          setRewardId(reward.id);
         }
       } catch {
         setSaving(false);
@@ -266,6 +270,11 @@ function TestOffer({
                 : "Watch an ad to unlock"}
         </Button>
       )}
+      <RewardModal
+        rewardId={rewardId}
+        signedIn={signedIn}
+        onClose={() => setRewardId(null)}
+      />
       <Modal.Backdrop isOpen={chooserOpen} onOpenChange={setChooserOpen}>
         <Modal.Container size="lg">
           <Modal.Dialog className="min-w-0">
