@@ -1084,7 +1084,8 @@ function describeDestination(item: FlowDestination, currentHost: string) {
     provider?.relatedSite === currentHost.toLowerCase().replace(/^www\./, "")
       ? "The site and this service belong to the same company."
       : "",
-    item.explanation,
+    // Known services are described above; the visit table has the detail.
+    provider || item.service ? "" : item.explanation,
   ]
     .filter(Boolean)
     .join(" ");
@@ -2106,6 +2107,8 @@ export function ReportContent({
     );
   }
   const services = recipientServices(report?.storageInventory);
+  // The site's own Plausible instance, when its policy names the host.
+  let plausibleHost: string | undefined;
   const flowDestinations: FlowDestination[] = [...attemptedDestinations].map(
     ([label, visits]) => ({
       label,
@@ -2136,6 +2139,7 @@ export function ReportContent({
       )?.[1] ?? selfHostedService?.[2];
     const hosts = new Set(source.observation.providerHosts ?? []);
     if (selfHosted?.endsWith("." + host)) hosts.add(selfHosted);
+    if (localPlausible && selfHosted) plausibleHost ??= selfHosted;
     for (const label of hosts) {
       const existing = flowDestinations.find(
         (destination) => destination.label === label,
@@ -2165,13 +2169,22 @@ export function ReportContent({
       fields.relation === "cross_site"
         ? finding.destination
         : fields.signature === "plausible_event"
-          ? "Site analytics"
+          ? (plausibleHost ?? "Site analytics")
           : "Site requests";
     const destination = flowDestinations.find((item) => item.label === label);
     if (destination) {
       if (!destination.explanation.includes(finding.text))
         destination.explanation += " " + finding.text;
       destination.evidenceIds.push(finding.evidenceId);
+      // Named in the policy and now seen in the browser: one node, both.
+      destination.observed = true;
+      if (label === plausibleHost)
+        destination.service ??= {
+          vendor: "Plausible (self-hosted)",
+          purpose: "analytics",
+          reason:
+            "The site's own Plausible Analytics instance. It counts visits without cookies, and the data stays with the site instead of going to an analytics company.",
+        };
     } else {
       flowDestinations.push({
         label,
