@@ -92,7 +92,9 @@ export function FlyForPoints({ freeFlights }: { freeFlights: string[] }) {
         </h2>
         <p className="m-0 text-sm leading-relaxed text-muted">
           Watch a short ad, then fly the paper plane. Collect before it flies
-          away for 1–{flightCap} points, or miss and get nothing.
+          away for{" "}
+          <span className="whitespace-nowrap">1–{flightCap} points</span>, or
+          miss and get nothing.
         </p>
         {remaining.length > 0 && (
           <p className="m-0 text-sm font-medium text-accent">

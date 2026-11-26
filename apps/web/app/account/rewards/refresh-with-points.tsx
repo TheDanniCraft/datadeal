@@ -32,16 +32,21 @@ export function RefreshWithPoints({ balance }: { balance: number }) {
   const pending = useRef<{ host: string; id: string } | null>(null);
   const parsed = siteDomain.safeParse(host);
   return (
-    <section aria-labelledby="point-refresh" className="space-y-3">
-      <h2 id="point-refresh" className="text-xl">
-        Refresh a report
-      </h2>
-      <p className="text-sm">
-        Spend {cost} report points to request a new scan of an existing report.
-        If the scan fails to produce usable evidence, your points are returned.
-      </p>
+    <section
+      aria-labelledby="point-refresh"
+      className="grid gap-4 rounded-2xl border border-separator p-5"
+    >
+      <div className="grid gap-1">
+        <h2 id="point-refresh" className="m-0 text-lg font-semibold">
+          Refresh a report
+        </h2>
+        <p className="m-0 text-sm leading-relaxed text-muted">
+          Spend {cost} points on a new scan of a site that already has a report.
+          If the scan finds nothing usable, you get the points back.
+        </p>
+      </div>
       <form
-        className="grid max-w-md gap-3"
+        className="grid gap-3"
         onSubmit={async (event) => {
           event.preventDefault();
           if (busy || !parsed.success) return;
@@ -83,40 +88,40 @@ export function RefreshWithPoints({ balance }: { balance: number }) {
             setMessage("");
           }}
           isDisabled={busy}
+          className="min-w-0"
         >
-          <Label>Report domain</Label>
-          <Input
-            placeholder="example.com"
-            autoCapitalize="none"
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </TextField>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            type="submit"
-            variant="secondary"
-            isDisabled={busy || !parsed.success || balance < cost}
-          >
-            {busy ? "Requesting refresh…" : `Refresh for ${cost} points`}
-          </Button>
-          {parsed.success && (
-            <Link
-              href={"/report/" + parsed.data}
-              className="inline-link text-sm"
+          <Label className="sr-only">Report domain</Label>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <Input
+              className="min-h-11"
+              placeholder="example.com"
+              autoCapitalize="none"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <Button
+              type="submit"
+              variant="secondary"
+              className="min-h-11"
+              isDisabled={busy || !parsed.success || balance < cost}
             >
-              Open free report
-            </Link>
-          )}
-        </div>
-        {balance < cost && (
-          <p className="text-sm text-muted">
-            This refresh requires {cost} points.
-          </p>
+              {busy ? "Requesting refresh…" : `Refresh for ${cost} points`}
+            </Button>
+          </div>
+        </TextField>
+        {(parsed.success || balance < cost || message) && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            {parsed.success && (
+              <Link href={"/report/" + parsed.data} className="inline-link">
+                Open the free report
+              </Link>
+            )}
+            {balance < cost && (
+              <span className="text-muted">You need {cost} points.</span>
+            )}
+            <span role="status">{message}</span>
+          </div>
         )}
-        <p role="status" className="text-sm">
-          {message}
-        </p>
       </form>
     </section>
   );
