@@ -102,19 +102,6 @@ export default async function AccountPage({
       <h2 className="border-t border-separator pt-8 text-lg font-semibold tracking-tight">
         Settings
       </h2>
-      <Link href="/account/developer" className="block">
-        <ItemCard className="hover:bg-surface-secondary">
-          <ItemCard.Icon>
-            <AccountIcon name="developer" />
-          </ItemCard.Icon>
-          <ItemCard.Content>
-            <ItemCard.Title>Developer API</ItemCard.Title>
-            <ItemCard.Description className="whitespace-normal">
-              Tokens and credit activity for the DataDeal API.
-            </ItemCard.Description>
-          </ItemCard.Content>
-        </ItemCard>
-      </Link>
       {profile && (
         <section className="space-y-3" aria-label="Privacy profile">
           <h3 className="text-base font-semibold">Privacy profile</h3>
