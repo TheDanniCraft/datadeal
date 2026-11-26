@@ -416,3 +416,35 @@ test("a vendor takes the majority jurisdiction of its items", () => {
   );
   expect(r.inventoryAssessment?.costs.every((x) => !x.outsideEu)).toBe(true);
 });
+
+test("self-hosted Plausible is labelled as the site's own analytics", () => {
+  const scanId = "00000000-0000-4000-8000-000000000002";
+  const proxy = recipient("site.example", {
+    phases: ["before_choice", "after_accept"],
+    fields: ["page_url", "event_name"],
+    via: { kind: "first_party_proxy", vendor: "plausible" },
+  });
+  const r = rate(
+    inventory([[proxy, classify(proxy, "analytics", "processor")]]),
+    "accepted",
+    {
+      ...covered,
+      id: scanId,
+      findings: [{ rule: "policy_available" }],
+      evidence: [
+        {
+          id: "document-1-section-2",
+          kind: "declared_first_party",
+          scanId,
+          excerpt:
+            "We use a self-hosted instance of Plausible Analytics on our own servers.",
+          retrievedAt: new Date(0).toISOString(),
+          observation: { type: "policy_section", heading: "Analytics" },
+        },
+      ],
+    },
+  );
+  expect(r.inventoryAssessment?.costs[0].label).toBe(
+    "Self-hosted Plausible analytics on site.example",
+  );
+});

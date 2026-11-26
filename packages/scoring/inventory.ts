@@ -1,4 +1,5 @@
 import { isEuropean } from "@datadeal/contracts";
+import { selfHostedPlausible } from "@datadeal/contracts/hosting-disclosure";
 import type { PublishedScoring, ScanReport } from "@datadeal/contracts";
 import type {
   InventoryClassification,
@@ -283,14 +284,23 @@ export function inventoryCostsFor(
   };
   for (const item of inventory.storage)
     add(item, storageLabel(item), storageCost(item, byId.get(item.id)));
+  // The policy says the site runs Plausible itself: events stay with the site.
+  const ownPlausible = report?.evidence?.some(
+    (e) =>
+      e.scanId === report.id &&
+      e.observation?.type === "policy_section" &&
+      !!selfHostedPlausible(e.excerpt),
+  );
   for (const item of inventory.recipients)
     add(
       item,
-      item.via
-        ? `${proxyLabels[item.via.vendor]} event forwarded via ${item.domain}`
-        : declaredOnly(item)
-          ? `When you use a feature: ${item.domain} (named in the privacy policy)`
-          : "Data sent to " + item.domain,
+      item.via?.vendor === "plausible" && ownPlausible
+        ? `Self-hosted Plausible analytics on ${item.domain}`
+        : item.via
+          ? `${proxyLabels[item.via.vendor]} event forwarded via ${item.domain}`
+          : declaredOnly(item)
+            ? `When you use a feature: ${item.domain} (named in the privacy policy)`
+            : "Data sent to " + item.domain,
       recipientCost(item, byId.get(item.id)),
     );
   const hosting = report?.evidence?.find(
