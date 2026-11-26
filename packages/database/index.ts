@@ -1,3 +1,9 @@
+import {
+  browserScanFacts,
+  browserScansAgree,
+  browserScanUpload,
+  type BrowserScanUpload,
+} from "@datadeal/contracts/browser-scan";
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { desc, eq } from "drizzle-orm";
@@ -11,6 +17,7 @@ import {
   scanStage,
   type ScanStage,
   type PrivacyPreference,
+  siteDomain,
 } from "@datadeal/contracts";
 import {
   acceptAllScoreChange,
@@ -705,9 +712,15 @@ export function connect(url: string, { reusePool = false } = {}) {
       const owner = randomUUID();
       return sql.begin(async (tx) => {
         const [row] = await tx<
-          { id: string; domain: string; attempts: number }[]
+          {
+            id: string;
+            domain: string;
+            attempts: number;
+            uploadId: string | null;
+          }[]
         >`
-          select s.id, s.domain, j.attempts from scan_jobs j join scans s on s.id = j.scan_id
+          select s.id, s.domain, j.attempts, j.upload_id as "uploadId"
+          from scan_jobs j join scans s on s.id = j.scan_id
           where j.lease_until is null or j.lease_until < now()
           order by case
             when s.requested_at <= now() - interval '10 minutes' then 0
@@ -744,6 +757,74 @@ export function connect(url: string, { reusePool = false } = {}) {
         await tx`update scans set state = 'queued' where id = ${id}`;
         return true;
       });
+    },
+    /**
+     * Stores a browser-collected scan. It is queued for publication once a
+     * second person's upload for the same site agrees (or at once when
+     * `single` is set, for local development).
+     */
+    async submitBrowserScan(
+      userId: string,
+      upload: BrowserScanUpload,
+      single = false,
+    ) {
+      const facts = browserScanFacts(upload);
+      return sql.begin(async (tx) => {
+        await tx`insert into domains(name) values(${upload.domain}) on conflict do nothing`;
+        const [recent] = await tx`select 1 from browser_scan_uploads
+          where domain = ${upload.domain} and user_id = ${userId}
+            and created_at > now() - interval '1 hour'`;
+        if (recent) return { status: "duplicate" as const };
+        const id = randomUUID();
+        await tx`insert into browser_scan_uploads(id, domain, user_id, payload, facts)
+          values(${id}, ${upload.domain}, ${userId}, ${JSON.stringify(upload)}::text::jsonb,
+            ${JSON.stringify(facts)}::text::jsonb)`;
+        const others = await tx<{ id: string; facts: unknown }[]>`
+          select id, facts from browser_scan_uploads
+          where domain = ${upload.domain} and user_id <> ${userId} and scan_id is null
+            and created_at > now() - interval '7 days'
+          order by created_at desc limit 20`;
+        const match = others.find((other) =>
+          browserScansAgree(
+            facts,
+            other.facts as ReturnType<typeof browserScanFacts>,
+          ),
+        );
+        if (!match && !single)
+          return { status: "needs_confirmation" as const, uploadId: id };
+        const scanId = randomUUID();
+        await tx`insert into scans(id, domain, state) values(${scanId}, ${upload.domain}, 'queued')`;
+        await tx`insert into scan_jobs(scan_id, priority, upload_id) values(${scanId}, true, ${id})`;
+        await tx`update browser_scan_uploads set scan_id = ${scanId}
+          where id = ${id} or id = ${match?.id ?? null}`;
+        return { status: "queued" as const, scanId, uploadId: id };
+      });
+    },
+    async browserScanUpload(scanId: string) {
+      const [row] = await sql<{ payload: unknown }[]>`
+        select u.payload from scan_jobs j join browser_scan_uploads u on u.id = j.upload_id
+        where j.scan_id = ${scanId}`;
+      return row ? browserScanUpload.parse(row.payload) : undefined;
+    },
+    /** The next site that blocks the server and still needs this person's browser. */
+    async nextBrowserScan(userId: string) {
+      const [row] = await sql<{ domain: string }[]>`
+        select s.domain from scans s
+        where s.failure = 'blocked'
+          and s.requested_at = (select max(requested_at) from scans x where x.domain = s.domain)
+          and not exists (select 1 from browser_scan_uploads u
+            where u.domain = s.domain and u.user_id = ${userId}
+              and u.created_at > now() - interval '7 days')
+        order by s.requested_at limit 1`;
+      return row?.domain;
+    },
+    /** Browser-queue state for a site whose latest scan was blocked. */
+    async browserScanStatus(host: string) {
+      const [row] = await sql<{ pending: number }[]>`
+        select count(*)::int as pending from browser_scan_uploads
+        where domain = ${siteDomain.parse(host)} and scan_id is null
+          and created_at > now() - interval '7 days'`;
+      return { pendingUploads: row?.pending ?? 0 };
     },
     /** 1 = next to start. Uses the same order as claim(); running scans are not counted. */
     async queuePosition(id: string) {

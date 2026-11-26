@@ -18,7 +18,8 @@
     "./paper-plane": "./paper-plane.ts",
     "./creem-credits": "./creem-credits.ts",
     "./hosting-disclosure": "./hosting-disclosure.ts",
-    "./storage-inventory": "./storage-inventory.ts"
+    "./storage-inventory": "./storage-inventory.ts",
+    "./browser-scan": "./browser-scan.ts"
   },
   "private": true,
   "scripts": {

@@ -35,7 +35,7 @@ const consentOutcome = z.enum([
   "inconclusive",
   "untested",
 ]);
-const consentCoverage = z.object({
+export const consentCoverage = z.object({
   default: consentOutcome,
   rejected: consentOutcome,
   accepted: consentOutcome,
@@ -484,6 +484,9 @@ export const scanReport = z.object({
   completedAt: z.iso.datetime(),
   demo: z.boolean(),
   partial: z.boolean(),
+  // Set when the visits were measured in a visitor's private browser window
+  // (the site blocks the server's scanner).
+  collectedBy: z.literal("visitor_browser").optional(),
   consentCoverage: consentCoverage.optional(),
   pageSample: z
     .object({

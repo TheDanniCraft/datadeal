@@ -1,3 +1,4 @@
+import { recordVisits } from "./visit-evidence";
 import { createHash } from "node:crypto";
 import {
   practiceAnalysisInput,
@@ -15,6 +16,7 @@ import { connect, type ScanStage } from "@datadeal/database";
 import {
   configuredContentPageLimit,
   isRetryableScanFailure,
+  withCapturedPages,
   researchVendorPolicy,
   scan,
 } from "@datadeal/scanner";
@@ -146,16 +148,25 @@ export async function runWorker(
         return owned;
       };
       let report: Awaited<ReturnType<typeof scan>>;
+      // A site that blocks the scanner, measured in a visitor's browser.
+      const upload = job.uploadId
+        ? await db.browserScanUpload(job.id)
+        : undefined;
       try {
-        report = await scan(
-          job.id,
-          job.domain,
-          analyzer.selectPrivacyDocuments?.bind(analyzer),
-          async (stage) => {
-            if (!(await renewLease(stage))) throw new Error("Scan lease lost");
-          },
-          { contentPageLimit: pageLimit },
-        );
+        const run = () =>
+          scan(
+            job.id,
+            job.domain,
+            analyzer.selectPrivacyDocuments?.bind(analyzer),
+            async (stage) => {
+              if (!(await renewLease(stage)))
+                throw new Error("Scan lease lost");
+            },
+            { contentPageLimit: upload ? 1 : pageLimit },
+          );
+        report = upload
+          ? await withCapturedPages(upload.pages, run)
+          : await run();
       } catch (error) {
         const retry =
           isRetryableScanFailure(error) &&
@@ -186,7 +197,27 @@ export async function runWorker(
         continue;
       }
       report.consentCoverage = { ...untestedConsentCoverage };
-      if (
+      if (upload) {
+        report.collectedBy = "visitor_browser";
+        report.consentCoverage = upload.coverage;
+        recordVisits(
+          report,
+          upload.visits.map(
+            ({ scenario, visitedUrl, observation, network }) => ({
+              ...observation,
+              scenario,
+              visitedUrl,
+              network,
+            }),
+          ),
+          new URL(upload.homepageUrl),
+          job.id,
+        );
+        report.partial = !(
+          upload.visits.some(({ scenario }) => scenario === "default") &&
+          report.findings.some(({ rule }) => rule === "policy_available")
+        );
+      } else if (
         launchBrowser &&
         (consentDomains.has("*") || consentDomains.has(job.domain))
       ) {
@@ -214,102 +245,16 @@ export async function runWorker(
               observations.some(({ scenario }) => scenario === "default") &&
               report.findings.some(({ rule }) => rule === "policy_available")
             );
-            for (const {
-              scenario,
-              visitedUrl,
-              requests,
-              cookies,
-              storage,
-              storageSummary,
-              freshContext,
-              capture,
-              externalDomains,
-              responseDomains,
-              network,
-              requestInspection,
-              afterChoice,
-            } of observations) {
-              const evidenceId = `browser-consent-${scenario}`;
-              const choiceObserved = afterChoice && scenario !== "default";
-              report.evidence.push({
-                id: evidenceId,
-                kind: "observed_technical",
-                consentScenario: scenario,
-                url: visitedUrl,
-                excerpt:
-                  `This visit attempted ${requests} HTTP requests. The browser observed for ${consentSettleMs / 1000} seconds after ${choiceObserved ? "the consent choice" : "the page loaded"} and submitted no forms. The browser context held ${cookies} cookies at the end of the observation window.` +
-                  (storage
-                    ? ` The top-level origin held ${storage.localEntries} local storage and ${storage.sessionEntries} session storage entries.`
-                    : "") +
-                  (choiceObserved
-                    ? ` The visible ${scenario === "rejected" ? "reject" : "accept"} control disappeared after the browser clicked it.`
-                    : ""),
-                observation: {
-                  type: "browser_consent_counts",
-                  freshContext,
-                  capture,
-                  requestInspection,
-                  finalPageKnown: true,
-                  requests,
-                  cookies,
-                  storage,
-                  storageSummary,
-                  externalDomains,
-                  responseDomains,
-                  afterChoice,
-                },
-                retrievedAt: new Date().toISOString(),
-                scanId: job.id,
-              });
-              for (const [index, observation] of network.entries()) {
-                const matchedEmail = observation.fieldCategories.includes(
-                  "email_address_value",
-                );
-                const fields = observation.fieldCategories
-                  .filter(
-                    (field) =>
-                      !matchedEmail ||
-                      (field !== "email" && field !== "email_value"),
-                  )
-                  .map((field) =>
-                    field === "email_address_value"
-                      ? "an email-shaped value in an email field"
-                      : field === "email_value"
-                        ? "an email-shaped value"
-                        : field.replaceAll("_", " ") + " field",
-                  );
-                report.evidence.push({
-                  id: `browser-network-${scenario}-${index + 1}`,
-                  kind: "observed_technical",
-                  consentScenario: scenario,
-                  url: homepage.origin,
-                  excerpt:
-                    `The browser attempted ${observation.attempts} ${observation.method} request(s) to ${observation.targetDomain} containing ${fields.join(", ")}. It observed ${observation.responses} HTTP response(s).` +
-                    (observation.signature === "permutive_event"
-                      ? " The request format matches Permutive’s Events API."
-                      : observation.signature === "plausible_event"
-                        ? " The request format matches the Plausible Events API."
-                        : ""),
-                  retrievedAt: new Date().toISOString(),
-                  scanId: job.id,
-                  observation,
-                });
-              }
-              if (scenario === "rejected" && choiceObserved) {
-                report.findings = report.findings.filter(
-                  (item) => item.rule !== "optional_control",
-                );
-                report.findings.push({
-                  rule: "optional_control",
-                  title: "Browser interaction with a reject control observed",
-                  explanation:
-                    "The browser clicked the visible reject control and the control disappeared. The scan did not establish whether all optional processing stopped.",
-                  confidence: "moderate",
-                  severity: "informational",
-                  evidenceIds: [evidenceId],
-                });
-              }
-            }
+            recordVisits(
+              report,
+              observations.map((visit) => ({
+                ...visit,
+                type: "browser_consent_counts" as const,
+                finalPageKnown: true,
+              })),
+              homepage,
+              job.id,
+            );
             if (
               job.domain === "facebook.com" &&
               observations.some((visit) =>

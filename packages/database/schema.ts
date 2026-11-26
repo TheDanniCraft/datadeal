@@ -35,6 +35,7 @@ export const jobs = pgTable("scan_jobs", {
   owner: uuid(),
   attempts: integer().notNull().default(0),
   stages: text().array().notNull().default([]),
+  uploadId: uuid("upload_id"),
 });
 
 export const scanAnalyses = pgTable(

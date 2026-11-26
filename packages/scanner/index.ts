@@ -4,6 +4,7 @@ import {
   summarizeResponseCookies,
 } from "./observations";
 import { Resolver } from "node:dns/promises";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { resolvePublicAddress } from "./public-address";
 import { detectHosting, hostingHeaderNames, isEuropean } from "./hosting";
 export { resolvePublicAddress } from "./public-address";
@@ -63,6 +64,27 @@ export function isRetryableScanFailure(error: unknown): boolean {
   );
 }
 
+// Pages a visitor's browser captured for a site that blocks the scanner.
+// While set, page reads are answered from here and never hit the network.
+type CapturedPage = { url: string; html: string };
+const capturedPages = new AsyncLocalStorage<Map<string, CapturedPage>>();
+const pageKey = (href: string) => {
+  const url = new URL(href);
+  const host = url.hostname.replace(/^www\./, "");
+  return host + (url.pathname.replace(/\/+$/, "") || "/") + url.search;
+};
+
+/** Runs a scan against pages captured in a visitor's browser. */
+export function withCapturedPages<T>(
+  pages: readonly CapturedPage[],
+  run: () => Promise<T>,
+) {
+  return capturedPages.run(
+    new Map(pages.map((page) => [pageKey(page.url), page])),
+    run,
+  );
+}
+
 async function readablePage(
   url: URL,
   origin: URL,
@@ -80,6 +102,21 @@ async function readablePage(
   headers?: Record<string, string>;
   cookies: ReturnType<typeof summarizeResponseCookies>;
 }> {
+  const captured = capturedPages.getStore();
+  if (captured) {
+    const page =
+      format === "image" ? undefined : captured.get(pageKey(url.href));
+    if (!page) throw new Error("Page was not captured");
+    return {
+      html: page.html,
+      url: new URL(page.url),
+      cookies: summarizeResponseCookies([]),
+      address: await resolvePublicAddress(url.hostname)
+        .then(({ address }) => address)
+        .catch(() => undefined),
+      headers: {},
+    };
+  }
   if (
     url.origin !== origin.origin ||
     url.username ||
