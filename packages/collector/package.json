@@ -1,0 +1,20 @@
+{
+  "type": "module",
+  "name": "@datadeal/collector",
+  "dependencies": {
+    "@datadeal/contracts": "workspace:*",
+    "tldts": "7.5.5"
+  },
+  "devDependencies": {
+    "playwright": "1.65.1"
+  },
+  "exports": {
+    "./request-fields": "./request-fields.ts",
+    "./identifier-match": "./identifier-match.ts",
+    "./consent": "./consent.ts"
+  },
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc"
+  }
+}

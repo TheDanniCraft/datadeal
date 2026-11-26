@@ -21,16 +21,20 @@ import { setTimeout as delay } from "node:timers/promises";
 import { getDomain, parse } from "tldts";
 import { requestFieldCollector } from "./request-fields";
 import {
+  acceptAllName,
+  acceptName,
+  consentSettleMs,
+  rejectName,
+  shortAcceptAllName,
+  shortRejectName,
+} from "@datadeal/collector/consent";
+import {
   isolatedIdentifierMatcher,
   readPermutiveVisitorId,
   type IsolatedIdentifierMatcher,
 } from "./identifier-match";
 
-const acceptAllName =
-  /^(?:(?:accept|allow) all cookies|alle cookies (?:akzeptieren|erlauben))$/i;
-const shortAcceptAllName =
-  /^(?:(?:accept|allow) all|(?:alle|alles) (?:akzeptieren|erlauben))$/i;
-export const consentSettleMs = 3000;
+export { consentSettleMs };
 
 /**
  * Many trackers (Plausible, some ad tags) skip browsers that announce
@@ -52,19 +56,8 @@ export const realVisitorLaunchArgs = [
 ];
 const scenarios = [
   ["default", null, null],
-  [
-    "rejected",
-    /^(?:(?:reject|decline) (?:all|optional|additional|analytics) cookies|accept only essential cookies|(?:alle|optionale) cookies ablehnen|nur notwendige cookies)$/i,
-    /^(?:(?:reject|decline) (?:all|optional)|(?:alle|alles) ablehnen)$/i,
-  ],
-  [
-    "accepted",
-    new RegExp(
-      `${acceptAllName.source}|^accept (?:additional|analytics) cookies$`,
-      "i",
-    ),
-    shortAcceptAllName,
-  ],
+  ["rejected", rejectName, shortRejectName],
+  ["accepted", acceptName, shortAcceptAllName],
 ] as const;
 
 type ConsentCoverage = NonNullable<
