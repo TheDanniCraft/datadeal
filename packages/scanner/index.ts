@@ -191,13 +191,15 @@ async function readablePage(
   }
   if (
     (format === "html" || (format === "document" && !pdf)) &&
-    isAccessInterstitial(
+    (isAccessInterstitial(
       html.match(/<title\b[^>]*>([^<]*)<\/title>/i)?.[1] ?? "",
       response.headers["cf-mitigated"],
       /\/cdn-cgi\/challenge-platform\/|id=["']challenge-(?:form|stage)["']/i.test(
         html,
-      ) || isBlockPage(html),
-    )
+      ),
+    ) ||
+      // Block pages that keep the site's own title (e.g. Reddit's).
+      isBlockPage(html))
   )
     throw new Error("Site returned an access challenge");
   const iconType =

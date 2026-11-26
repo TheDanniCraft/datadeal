@@ -1,5 +1,6 @@
 import {
   isAccessInterstitial,
+  isBlockPage,
   describeWebStorage,
   inspectWebStorage,
   summarizeBrowserCookies,
@@ -97,6 +98,7 @@ async function isMeasuredDocument(
   response: Response | null | undefined,
 ) {
   if (!response?.ok()) return false;
+  if (isBlockPage(await page.content().catch(() => ""))) return false;
   return !isAccessInterstitial(
     await page.title(),
     response.headers()["cf-mitigated"],
