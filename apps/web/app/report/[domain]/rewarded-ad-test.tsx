@@ -247,7 +247,7 @@ function TestOffer({
         <Button
           variant="secondary"
           size="sm"
-          className="min-h-11 w-full gap-2 sm:col-start-2 sm:row-start-1 sm:w-auto sm:self-center"
+          className="min-h-11 w-full gap-2"
           isDisabled={requested || saving}
           onPress={() =>
             retryId ? void saveReward(retryId) : setChooserOpen(true)
@@ -458,7 +458,7 @@ export function RewardedAdTest({
           </p>
         )}
       </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-2 sm:col-start-2 sm:row-start-1 sm:self-center sm:justify-end">
+      <div className="grid min-w-0 gap-2 sm:col-start-2 sm:row-start-1 sm:w-60 sm:self-center [&>button]:w-full">
         {canSpend && (
           <Button
             size="sm"
