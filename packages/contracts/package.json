@@ -2,6 +2,7 @@
   "type": "module",
   "name": "@datadeal/contracts",
   "dependencies": {
+    "croner": "9.0.0",
     "tldts": "7.5.5",
     "zod": "^4"
   },
@@ -19,7 +20,8 @@
     "./creem-credits": "./creem-credits.ts",
     "./hosting-disclosure": "./hosting-disclosure.ts",
     "./storage-inventory": "./storage-inventory.ts",
-    "./browser-scan": "./browser-scan.ts"
+    "./browser-scan": "./browser-scan.ts",
+    "./watch-schedule": "./watch-schedule.ts"
   },
   "private": true,
   "scripts": {

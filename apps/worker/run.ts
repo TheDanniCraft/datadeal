@@ -128,12 +128,10 @@ export async function runWorker(
             if (stopping) break;
             await db.enqueue(domain, "watchlist");
           }
-          // Points-funded monitors pay once a day; the ones that cannot pay stop.
-          const charged = await db.chargeMonitors();
-          if (charged.charged || charged.stopped)
-            console.info(
-              JSON.stringify({ event: "site_monitors_charged", ...charged }),
-            );
+          // Watched sites are rechecked on their own schedule and pay per check.
+          const watches = await db.runDueWatches();
+          if (watches.charged || watches.stopped || watches.fresh)
+            console.info(JSON.stringify({ event: "watches_run", ...watches }));
           for (const domain of await db.dueMonitoredDomains()) {
             if (stopping) break;
             await db.enqueue(domain, "monitor");

@@ -23,6 +23,7 @@ import { ProviderDisclosure } from "../../data-flow/provider-lookup";
 import { RewardedAdTest } from "./rewarded-ad-test";
 import { BoostScan } from "./boost-scan";
 import { WatchButton } from "./keep-updated";
+import type { WatchSchedule } from "@datadeal/contracts/watch-schedule";
 import { SaveSite } from "../../account/library/library-controls";
 import { LocalDate, useTimeZone } from "../../../lib/local-date";
 import { useClientReady } from "../../use-client-ready";
@@ -1991,6 +1992,7 @@ export function ReportContent({
     mode: "pro" | "points";
     balance: number;
     included?: { used: number; limit: number };
+    schedule?: WatchSchedule;
   };
   /** Free saving to the library, for signed-in visitors. */
   saved?: boolean;

@@ -22,6 +22,7 @@
     "@react-aria/utils": "^3.34.1",
     "@tailwindcss/postcss": "^4",
     "better-auth": "^1.7.27",
+    "cronstrue": "2.50.0",
     "motion": "^14.14.0",
     "next": "16.4.6",
     "pg": "^8.23.1",

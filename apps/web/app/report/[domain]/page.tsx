@@ -153,10 +153,10 @@ export default async function ReportPage({
       : [];
   // A site this account monitors keeps every new report open.
   const monitoring =
-    !pro && session && database && localPointsEnabled()
-      ? await database.isMonitoring(session.user.id, host)
-      : false;
-  const scanReward = localReward || accountReward || monitoring;
+    session && database && localPointsEnabled()
+      ? await database.monitorFor(session.user.id, host)
+      : null;
+  const scanReward = localReward || accountReward || Boolean(monitoring);
   const saved =
     session && database
       ? await database.isSaved(session.user.id, host)
@@ -500,8 +500,9 @@ export default async function ReportPage({
               : localPointsEnabled()
                 ? {
                     mode: "points",
-                    watching: monitoring,
+                    watching: Boolean(monitoring),
                     balance: pointBalance,
+                    schedule: monitoring?.schedule,
                   }
                 : undefined
         }

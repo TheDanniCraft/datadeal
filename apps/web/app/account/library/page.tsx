@@ -1,10 +1,11 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { buttonVariants } from "@heroui/styles";
+import { proIncludedWatches } from "@datadeal/contracts/paper-plane";
 import {
-  monitorDailyCost,
-  proIncludedWatches,
-} from "@datadeal/contracts/paper-plane";
+  describeWatchSchedule,
+  watchCheckCost,
+} from "@datadeal/contracts/watch-schedule";
 import {
   AccountCard,
   AccountEmpty,
@@ -99,7 +100,7 @@ export default async function LibraryPage() {
     database.hasPro(userId),
     database.listWatchlist(userId),
     database.documentAlerts(userId),
-    points ? database.listMonitors(userId) : ([] as string[]),
+    points ? database.listWatches(userId) : [],
     database.unlockedDomains(userId),
     points ? database.reportPointWallet(userId) : null,
   ]);
@@ -111,6 +112,7 @@ export default async function LibraryPage() {
       proWatch: item.document_alerts,
     })),
     ...monitors
+      .map((watch) => watch.domain)
       .filter((domain) => !saved.some((item) => item.domain === domain))
       .map((domain) => ({
         domain,
@@ -139,7 +141,7 @@ export default async function LibraryPage() {
           pro
             ? "Watching turns on weekly rescans and an email when the score or privacy documents change."
             : points
-              ? `Saving is free. Watching rescans the site every day for ${monitorDailyCost} points a day.`
+              ? `Saving is free. Watching rechecks a site on a schedule you pick, ${watchCheckCost} points per check.`
               : "Saving is free. Watching with weekly rescans and alerts is part of Pro."
         }
         action={<SaveForm />}
@@ -157,7 +159,10 @@ export default async function LibraryPage() {
                 (site.proWatch || proWatches < proIncludedWatches || !points);
               const watching = usePro
                 ? site.proWatch
-                : monitors.includes(site.domain);
+                : monitors.some((watch) => watch.domain === site.domain);
+              const watch = monitors.find(
+                (item) => item.domain === site.domain,
+              );
               return (
                 <AccountRow
                   key={site.domain}
@@ -180,7 +185,7 @@ export default async function LibraryPage() {
                       usePro ? (
                         "Watching · weekly rescans and email alerts"
                       ) : (
-                        `Watching · ${monitorDailyCost} points a day`
+                        `Watching ${watch ? describeWatchSchedule(watch.schedule) : ""} · ${watchCheckCost} points per check`
                       )
                     ) : site.since ? (
                       <>
@@ -199,6 +204,7 @@ export default async function LibraryPage() {
                       mode={usePro ? "pro" : "points"}
                       balance={wallet?.balance ?? 0}
                       saved={site.saved}
+                      schedule={watch?.schedule}
                       included={
                         usePro
                           ? { used: proWatches, limit: proIncludedWatches }

@@ -12,13 +12,6 @@ export const proIncludedWatches = 2;
 export const proMonthlyBoosts = 5;
 /** Watched sites rescan daily, at this discount on a manual rescan. */
 export const watchDiscount = 0.1;
-/**
- * Watching a site with points, paid each day: that day's rescan at the watch
- * discount (150 × 0.9 = 135 instead of 150).
- */
-export const monitorDailyCost = Math.round(
-  defaultRefreshPointCost * (1 - watchDiscount),
-);
 /** The most requested sites rescan weekly for free. */
 export const freeRescanSites = 50;
 // Surviving flights pause here once so the player can bank or fly on

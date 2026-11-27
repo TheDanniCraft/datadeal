@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { domain } from "@datadeal/contracts";
+import {
+  watchSchedule,
+  watchScheduleError,
+} from "@datadeal/contracts/watch-schedule";
 import { auth } from "../../../../lib/auth";
 import { database } from "../../../../lib/reports";
 import {
@@ -7,7 +11,11 @@ import {
   privateHeaders,
 } from "../../../../lib/point-offer";
 
-const body = z.strictObject({ domain, monitor: z.boolean() });
+const body = z.strictObject({
+  domain,
+  monitor: z.boolean(),
+  schedule: watchSchedule.optional(),
+});
 
 /** "Keep me updated": start or stop a points-funded site monitor. */
 export async function POST(request: Request) {
@@ -22,9 +30,17 @@ export async function POST(request: Request) {
     await database.stopMonitoring(session.user.id, input.data.domain);
     return Response.json({ code: "stopped" }, { headers: privateHeaders });
   }
+  const schedule = input.data.schedule ?? { kind: "days" as const, days: 1 };
+  const problem = watchScheduleError(schedule);
+  if (problem)
+    return Response.json(
+      { code: "schedule", error: problem },
+      { status: 400, headers: privateHeaders },
+    );
   const code = await database.startMonitoring(
     session.user.id,
     input.data.domain,
+    schedule,
   );
   return Response.json(
     { code },

@@ -47,8 +47,15 @@ import * as schema from "./schema";
 export { applyReportPoints } from "./report-points";
 import { applyReportPoints } from "./report-points";
 import {
+  nextWatchCheck,
+  watchCheckCost,
+  watchFreshWindowHours,
+  watchSchedule,
+  watchScheduleError,
+  type WatchSchedule,
+} from "@datadeal/contracts/watch-schedule";
+import {
   freeRescanSites,
-  monitorDailyCost,
   proIncludedWatches,
   proMonthlyBoosts,
   queueBoostCost,
@@ -99,6 +106,22 @@ const shared = globalThis as typeof globalThis & {
   datadealDevelopmentPool?: ReturnType<typeof postgres>;
 };
 
+class WatchRetry extends Error {}
+
+/** One ledger entry per watch and scheduled check. */
+function watchCheckReference(userId: string, host: string, due: Date) {
+  const hex = createHash("md5")
+    .update(`watch:${userId}|${host}|${new Date(due).toISOString()}`)
+    .digest("hex");
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join("-");
+}
+
 export function connect(url: string, { reusePool = false } = {}) {
   const sql = reusePool
     ? (shared.datadealDevelopmentPool ??= postgres(url, { max: 5 }))
@@ -127,31 +150,6 @@ export function connect(url: string, { reusePool = false } = {}) {
               and split_part(source->>'url', '/', 3) = split_part(page->>'url', '/', 3)
           ))
       )`;
-  }
-  /** Pays today for one monitor. Returns true when it had to stop. */
-  async function chargeMonitor(userId: string, host: string) {
-    return sql.begin(async (tx) => {
-      const [monitor] = await tx<{ paid: boolean }[]>`
-        select coalesce(paid_through >= current_date, false) as paid
-        from site_monitors where user_id = ${userId} and domain = ${host} for update`;
-      if (!monitor) return false;
-      if (monitor.paid) return false;
-      const [day] = await tx<{ reference: string }[]>`
-        select md5(${userId} || '|' || ${host} || '|' || current_date::text)::uuid::text as reference`;
-      const debit = await applyReportPoints(tx, {
-        userId,
-        delta: -monitorDailyCost,
-        operation: "site_monitor",
-        referenceId: day!.reference,
-      });
-      if (debit === "insufficient") {
-        await tx`delete from site_monitors where user_id = ${userId} and domain = ${host}`;
-        return true;
-      }
-      await tx`update site_monitors set paid_through = current_date
-        where user_id = ${userId} and domain = ${host}`;
-      return false;
-    });
   }
   async function enqueueScan(
     tx: TransactionSql,
@@ -185,7 +183,7 @@ export function connect(url: string, { reusePool = false } = {}) {
       : source === "manual"
         ? 1
         : source === "monitor"
-          ? 20
+          ? 0
           : 168;
     const [existing] = await tx<
       { id: string; state: string; retryAfter: number }[]
@@ -773,70 +771,163 @@ export function connect(url: string, { reusePool = false } = {}) {
         limit 3`;
       return rows.map((row) => row.domain);
     },
-    /**
-     * Sites due for a weekly rescan outside the Pro watchlist: those someone
-     * pays to monitor, and the most requested sites, which rescan for free.
-     */
+    /** The most requested sites rescan weekly for free. */
     async dueMonitoredDomains() {
       const rows = await sql<{ domain: string }[]>`
-        with wanted as (
-          select domain, 0 as rank, interval '20 hours' as every from site_monitors
-          where paid_through >= current_date
-          union all
-          select domain, 1, interval '7 days' from (
-            select domain from scans
-            where requested_at > now() - interval '30 days'
-              and report->'demo' = 'false'::jsonb
-            group by domain order by count(*) desc, domain
-            limit ${freeRescanSites}
-          ) popular
+        with popular as (
+          select domain from scans
+          where requested_at > now() - interval '30 days'
+            and report->'demo' = 'false'::jsonb
+          group by domain order by count(*) desc, domain
+          limit ${freeRescanSites}
         )
-        select w.domain from wanted w
-        where not exists (select 1 from scans s where s.domain = w.domain
-          and (s.state in ('queued','fetching') or s.requested_at > now() - w.every))
-          and exists (select 1 from scans s where s.domain = w.domain
+        select p.domain from popular p
+        where not exists (select 1 from scans s where s.domain = p.domain
+          and (s.state in ('queued','fetching') or s.requested_at > now() - interval '7 days'))
+          and exists (select 1 from scans s where s.domain = p.domain
             and s.state in ('completed','partially_completed'))
-        group by w.domain order by min(w.rank), w.domain
-        limit 3`;
+        order by p.domain limit 3`;
       return rows.map((row) => row.domain);
     },
-    /** Charge each monitor once per day; stop the ones that cannot pay. */
-    async chargeMonitors() {
+    /**
+     * Runs the watches that are due. Each recheck is paid when it runs; when
+     * the site already has a fresh scan, nobody pays and the watch moves on.
+     * A watch that cannot pay stops.
+     */
+    async runDueWatches(limit = 20) {
       const due = await sql<{ user_id: string; domain: string }[]>`
         select user_id, domain from site_monitors
-        where paid_through is null or paid_through < current_date
-        order by user_id, domain limit 500`;
-      let stopped = 0;
-      for (const row of due)
-        stopped += Number(await chargeMonitor(row.user_id, row.domain));
-      return { charged: due.length - stopped, stopped };
+        where next_check_at <= now()
+        order by next_check_at limit ${limit}`;
+      const counts = { charged: 0, fresh: 0, stopped: 0, waiting: 0 };
+      for (const row of due) {
+        const outcome = await sql
+          .begin(async (tx) => {
+            const [watch] = await tx<
+              { schedule: unknown; next_check_at: Date }[]
+            >`select schedule, next_check_at from site_monitors
+            where user_id = ${row.user_id} and domain = ${row.domain}
+              and next_check_at <= now() for update skip locked`;
+            if (!watch) return "waiting" as const;
+            const parsed = watchSchedule.safeParse(watch.schedule);
+            const schedule = parsed.success
+              ? parsed.data
+              : ({ kind: "days", days: 1 } as const);
+            const next =
+              nextWatchCheck(schedule, new Date()) ??
+              new Date(Date.now() + 24 * 60 * 60 * 1000);
+            const freshHours = watchFreshWindowHours(schedule);
+            const [fresh] =
+              await tx`select 1 from scans where domain = ${row.domain}
+            and (state in ('queued','fetching')
+              or requested_at > now() - make_interval(secs => ${Math.round(freshHours * 3600)}))
+            limit 1`;
+            if (!fresh) {
+              const debit = await applyReportPoints(tx, {
+                userId: row.user_id,
+                delta: -watchCheckCost,
+                operation: "site_monitor",
+                referenceId: watchCheckReference(
+                  row.user_id,
+                  row.domain,
+                  watch.next_check_at,
+                ),
+              });
+              if (debit === "insufficient") {
+                await tx`delete from site_monitors
+                where user_id = ${row.user_id} and domain = ${row.domain}`;
+                return "stopped" as const;
+              }
+              const queued = await tx.savepoint((sp) =>
+                enqueueScan(sp, row.domain, "monitor"),
+              );
+              // Queue full: undo the charge and try again on the next round.
+              if (queued.code !== "accepted") throw new WatchRetry();
+            }
+            await tx`update site_monitors set next_check_at = ${next.toISOString()}
+            where user_id = ${row.user_id} and domain = ${row.domain}`;
+            return fresh ? ("fresh" as const) : ("charged" as const);
+          })
+          .catch((error: unknown) => {
+            if (error instanceof WatchRetry) return "waiting" as const;
+            throw error;
+          });
+        counts[outcome]++;
+      }
+      return counts;
     },
-    async startMonitoring(userId: string, input: string) {
+    /** Start a watch, or change its schedule. The first check runs right away. */
+    async startMonitoring(
+      userId: string,
+      input: string,
+      schedule: WatchSchedule,
+    ) {
       const host = domain.parse(input);
-      await sql`insert into domains(name) values(${host}) on conflict do nothing`;
-      await sql`insert into site_monitors(user_id, domain) values(${userId}, ${host})
-        on conflict do nothing`;
-      // Today's day is paid up front, so an empty balance never starts one.
-      return (await chargeMonitor(userId, host))
-        ? ("insufficient" as const)
-        : ("monitoring" as const);
+      const parsed = watchSchedule.parse(schedule);
+      if (watchScheduleError(parsed)) return "schedule" as const;
+      return sql.begin(async (tx) => {
+        const [account] = await tx<{ balance: number }[]>`
+          select balance from report_point_accounts where user_id = ${userId}`;
+        const [existing] = await tx`select 1 from site_monitors
+          where user_id = ${userId} and domain = ${host} for update`;
+        if (!existing && Number(account?.balance ?? 0) < watchCheckCost)
+          return "insufficient" as const;
+        await tx`insert into domains(name) values(${host}) on conflict do nothing`;
+        if (existing) {
+          const next = nextWatchCheck(parsed, new Date());
+          await tx`update site_monitors set schedule = ${JSON.stringify(parsed)}::text::jsonb,
+            next_check_at = least(next_check_at, ${next?.toISOString() ?? new Date().toISOString()})
+            where user_id = ${userId} and domain = ${host}`;
+        } else
+          await tx`insert into site_monitors(user_id, domain, schedule, next_check_at)
+            values(${userId}, ${host}, ${JSON.stringify(parsed)}::text::jsonb, now())`;
+        return "monitoring" as const;
+      });
     },
     async stopMonitoring(userId: string, input: string) {
       await sql`delete from site_monitors where user_id = ${userId}
         and domain = ${domain.parse(input)}`;
     },
+    /** The watch on a site, if any: its schedule and next check. */
+    async monitorFor(userId: string, input: string) {
+      const [row] = await sql<{ schedule: unknown; next_check_at: Date }[]>`
+        select schedule, next_check_at from site_monitors
+        where user_id = ${userId} and domain = ${domain.parse(input)}`;
+      if (!row) return null;
+      const parsed = watchSchedule.safeParse(row.schedule);
+      return {
+        schedule: parsed.success
+          ? parsed.data
+          : ({ kind: "days", days: 1 } as const),
+        nextCheckAt: row.next_check_at,
+      };
+    },
     async isMonitoring(userId: string, input: string) {
       const [row] = await sql`select 1 from site_monitors
-        where user_id = ${userId} and domain = ${domain.parse(input)}
-          and paid_through >= current_date`;
+        where user_id = ${userId} and domain = ${domain.parse(input)}`;
       return Boolean(row);
     },
     async listMonitors(userId: string) {
-      const rows = await sql<{ domain: string }[]>`
-        select domain from site_monitors
-        where user_id = ${userId} and paid_through >= current_date
-        order by created_at desc, domain`;
+      const rows = await sql<{ domain: string; schedule: unknown }[]>`
+        select domain, schedule from site_monitors
+        where user_id = ${userId} order by created_at desc, domain`;
       return rows.map((row) => row.domain);
+    },
+    async listWatches(userId: string) {
+      const rows = await sql<
+        { domain: string; schedule: unknown; next_check_at: Date }[]
+      >`select domain, schedule, next_check_at from site_monitors
+        where user_id = ${userId} order by created_at desc, domain`;
+      return rows.map((row) => {
+        const parsed = watchSchedule.safeParse(row.schedule);
+        return {
+          domain: row.domain,
+          schedule: parsed.success
+            ? parsed.data
+            : ({ kind: "days", days: 1 } as const),
+          nextCheckAt: row.next_check_at,
+        };
+      });
     },
     async enqueue(
       input: string,
