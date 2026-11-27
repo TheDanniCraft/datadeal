@@ -31,9 +31,11 @@ async function post(url: string, method: string, body: unknown) {
     ? "Your balance is too low."
     : error?.code === "limit"
       ? "Your included Pro watches are in use. Stop one first."
-      : error?.code === "schedule" && error.error
-        ? error.error
-        : "Could not change this. Try again.";
+      : error?.code === "pro_required"
+        ? "Watching with alerts is part of Pro."
+        : error?.code === "schedule" && error.error
+          ? error.error
+          : "Could not change this. Try again.";
 }
 
 /**
@@ -49,6 +51,7 @@ export function WatchButton({
   saved = true,
   included,
   schedule: current,
+  label,
 }: {
   host: string;
   watching: boolean;
@@ -60,6 +63,8 @@ export function WatchButton({
   included?: { used: number; limit: number };
   /** The schedule of an existing points watch. */
   schedule?: WatchSchedule;
+  /** A text button (for example "Start again") instead of the bell. */
+  label?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -128,27 +133,34 @@ export function WatchButton({
 
   return (
     <>
-      <Button
-        isIconOnly
-        size="sm"
-        variant="ghost"
-        aria-label={(watching ? "Watching " : "Watch ") + host}
-        className={watching ? "text-accent" : undefined}
-        onPress={() => setOpen(true)}
-      >
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          className={
-            "size-4 stroke-current " + (watching ? "fill-current" : "fill-none")
-          }
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+      {label ? (
+        <Button size="sm" variant="secondary" onPress={() => setOpen(true)}>
+          {label}
+        </Button>
+      ) : (
+        <Button
+          isIconOnly
+          size="sm"
+          variant="ghost"
+          aria-label={(watching ? "Watching " : "Watch ") + host}
+          className={watching ? "text-accent" : undefined}
+          onPress={() => setOpen(true)}
         >
-          <path d={bell} />
-        </svg>
-      </Button>
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            className={
+              "size-4 stroke-current " +
+              (watching ? "fill-current" : "fill-none")
+            }
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d={bell} />
+          </svg>
+        </Button>
+      )}
       <Modal.Backdrop isOpen={open} onOpenChange={setOpen}>
         <Modal.Container size="md">
           <Modal.Dialog className="min-w-0">

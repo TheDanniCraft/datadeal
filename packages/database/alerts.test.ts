@@ -9,6 +9,12 @@ import { randomUUID } from "node:crypto";
 import { expect, it } from "vitest";
 import postgres from "postgres";
 import { connect } from "./index";
+import {
+  activatePro,
+  insertTestUser,
+  resetTestQueue,
+  testHost,
+} from "./test-support";
 
 const url = process.env.DATADEAL_TEST_DATABASE_URL;
 it.skipIf(!url)(
@@ -138,8 +144,9 @@ it.skipIf(!url)(
   async () => {
     const sql = postgres(url!);
     const db = connect(url!);
-    const domain = "alerts.example.com";
-    const oldId = "00100000-0000-4000-8000-000000000005";
+    const domain = testHost("alerts");
+    const oldId = randomUUID();
+    let user = "";
     const snapshot = (id: string, hash: string) => ({
       id,
       domain,
@@ -160,19 +167,16 @@ it.skipIf(!url)(
       ],
     });
     try {
-      await sql`insert into "user"(id,name,email) values ('alert-user','Alert User','alert@example.test')`;
-      await db.applyBillingEvent({
-        id: "alert-paid",
-        time: 1,
-        subscription: "alert-sub",
-        customer: "alert-cust",
-        product: "alert-product",
-        status: "active",
-        userId: "alert-user",
-        accessUntil: "2099-01-01T00:00:00Z",
-      });
-      expect(await db.saveWatchlistDomain("alert-user", domain)).toBe("saved");
-      await sql`insert into domains(name) values (${domain})`;
+      await resetTestQueue(sql);
+      user = await insertTestUser(sql, "alert-user");
+      await activatePro(db, user);
+      expect(await db.saveWatchlistDomain(user, domain)).toBe("saved");
+      // Saving is free; watching (alerts and weekly rescans) is turned on.
+      expect(await db.listWatchlist(user)).toMatchObject([
+        { domain, document_alerts: false },
+      ]);
+      expect(await db.setDocumentAlerts(user, domain, true)).toBe("updated");
+      await sql`insert into domains(name) values (${domain}) on conflict do nothing`;
       await sql`insert into scans(id,domain,state,requested_at,report) values
       (${oldId},${domain},'partially_completed',now() - interval '8 days',${JSON.stringify(snapshot(oldId, "before"))}::text::jsonb)`;
       expect((await db.list(domain))[0].report).toMatchObject({
@@ -200,11 +204,11 @@ it.skipIf(!url)(
       expect(
         await sql`select document_count from alerts where scan_id = ${id}`,
       ).toEqual([{ document_count: 1 }]);
-      expect(await db.hasPro("alert-user")).toBe(true);
-      expect(await db.listWatchlist("alert-user")).toMatchObject([
+      expect(await db.hasPro(user)).toBe(true);
+      expect(await db.listWatchlist(user)).toMatchObject([
         { domain, document_alerts: true },
       ]);
-      expect(await db.documentAlerts("alert-user")).toMatchObject([
+      expect(await db.documentAlerts(user)).toMatchObject([
         { scan_id: id, document_count: 1, created_at: expect.any(Date) },
       ]);
       expect(
@@ -213,12 +217,11 @@ it.skipIf(!url)(
         ),
       ).toEqual(["after", "before"]);
       expect(await db.documentAlerts("other")).toEqual([]);
-      expect(await db.setDocumentAlerts("alert-user", domain, false)).toBe(
-        "updated",
-      );
-      expect(await db.documentAlerts("alert-user")).toEqual([]);
+      expect(await db.setDocumentAlerts(user, domain, false)).toBe("updated");
+      expect(await db.documentAlerts(user)).toEqual([]);
       expect(await db.enqueue(domain, "watchlist")).toBeNull();
     } finally {
+      if (user) await sql`delete from "user" where id = ${user}`;
       await db.close();
       await sql.end();
     }
@@ -230,7 +233,8 @@ it.skipIf(!url)(
   async () => {
     const sql = postgres(url!);
     const db = connect(url!);
-    const domain = "rating-alerts.example.com";
+    const domain = testHost("rating-alerts");
+    let watcher = "";
     const firstId = randomUUID();
     const snapshot = (id: string, includesEvent: boolean, partial = false) => {
       const completedAt = new Date().toISOString();
@@ -327,19 +331,11 @@ it.skipIf(!url)(
       await sql`insert into domains(name) values (${domain})`;
       await sql`insert into scans(id,domain,state,requested_at,report) values
         (${firstId},${domain},'completed',now() - interval '2 hours',${JSON.stringify(snapshot(firstId, false))}::text::jsonb)`;
-      const watcher = "rating-alert-watcher";
-      await sql`insert into "user"(id,name,email) values (${watcher}, 'Watcher', 'rating-watcher@example.test')`;
-      await db.applyBillingEvent({
-        id: "rating-alert-paid",
-        time: 1,
-        subscription: "rating-alert-sub",
-        customer: "rating-alert-customer",
-        product: "rating-alert-product",
-        status: "active",
-        userId: watcher,
-        accessUntil: "2099-01-01T00:00:00Z",
-      });
-      await db.saveWatchlistDomain(watcher, domain);
+      await resetTestQueue(sql);
+      watcher = await insertTestUser(sql, "rating-alert-watcher");
+      await activatePro(db, watcher);
+      expect(await db.saveWatchlistDomain(watcher, domain)).toBe("saved");
+      expect(await db.setDocumentAlerts(watcher, domain, true)).toBe("updated");
       const second = await db.enqueue(domain);
       const job = await db.claim();
       expect(job?.id).toBe(second);
@@ -433,6 +429,7 @@ it.skipIf(!url)(
         },
       ]);
     } finally {
+      if (watcher) await sql`delete from "user" where id = ${watcher}`;
       await db.close();
       await sql.end();
     }

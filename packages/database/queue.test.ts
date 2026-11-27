@@ -1,11 +1,22 @@
 import { randomUUID } from "node:crypto";
 import { methodologyVersion } from "@datadeal/scoring";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { connect } from "./index";
 import postgres from "postgres";
+import { activatePro, insertTestUser, resetTestQueue } from "./test-support";
 
 const url = process.env.DATADEAL_TEST_DATABASE_URL;
 describe.skipIf(!url)("PostgreSQL scan queue", () => {
+  // Claims expect an empty queue, also when the suite is run again.
+  beforeEach(async () => {
+    const sql = postgres(url!);
+    try {
+      await resetTestQueue(sql);
+    } finally {
+      await sql.end();
+    }
+  });
+
   it("requires the migrated application schema for readiness", async () => {
     const db = connect(url!);
     const unmigrated = new URL(url!);
@@ -24,7 +35,9 @@ describe.skipIf(!url)("PostgreSQL scan queue", () => {
   it("lists fresh real reports with a verified accept-all score or an explicit unrated status", async () => {
     const db = connect(url!);
     const sql = postgres(url!);
-    const suffix = randomUUID() + ".example.com";
+    // Listings skip reserved test domains (example.com, .test), so use a
+    // real-looking one.
+    const suffix = randomUUID() + ".dd-test.dev";
     const completedAt = new Date().toISOString();
     const rating = {
       methodologyVersion,
@@ -88,8 +101,8 @@ describe.skipIf(!url)("PostgreSQL scan queue", () => {
         if (label === "confirmed")
           await sql`insert into scans(id,domain,state) values (${randomUUID()},${domain},'queued')`;
       }
-      const recent = (await db.recentPublishedDomains()).filter((row) =>
-        row.domain.endsWith(suffix),
+      const recent = (await db.recentPublishedDomains({ days: 7 })).filter(
+        (row) => row.domain.endsWith(suffix),
       );
       expect(recent).toHaveLength(3);
       expect(
@@ -120,7 +133,9 @@ describe.skipIf(!url)("PostgreSQL scan queue", () => {
     const db = connect(url!);
     const sql = postgres(url!);
     const suffix = randomUUID() + ".example.com";
-    const provider = "provider." + suffix;
+    // Ties in the provider ranking sort by name: keep this one ahead of
+    // providers left by earlier runs on a shared test database.
+    const provider = "0-provider." + suffix;
     const expected = {
       domain: "visible." + suffix,
       scanId: randomUUID(),
@@ -167,7 +182,7 @@ describe.skipIf(!url)("PostgreSQL scan queue", () => {
     const db = connect(url!);
     const sql = postgres(url!);
     const host = randomUUID() + ".example.com";
-    const provider = "cdn." + randomUUID() + ".example";
+    const provider = "0-cdn." + randomUUID() + ".example";
     const scanId = randomUUID();
     const pageUrl = "https://" + host + "/story";
     function observed(
@@ -269,16 +284,17 @@ describe.skipIf(!url)("PostgreSQL scan queue", () => {
   it("renews only an active lease and reports whether completion was committed", async () => {
     const db = connect(url!);
     const sql = postgres(url!);
+    const host = "renew-lease." + randomUUID() + ".example.com";
     try {
-      const id = await db.enqueue("renew-lease.example.com");
-      expect((await db.list("RENEW-LEASE.EXAMPLE.COM"))[0]).toMatchObject({
+      const id = await db.enqueue(host);
+      expect((await db.list(host.toUpperCase()))[0]).toMatchObject({
         id,
         state: "queued",
       });
       const original = await db.claim();
       expect(original?.id).toBe(id);
       expect(await db.activeScanStages(id!)).toEqual(["homepage"]);
-      expect((await db.list("renew-lease.example.com"))[0]).toMatchObject({
+      expect((await db.list(host))[0]).toMatchObject({
         id,
         state: "fetching",
       });
@@ -303,15 +319,11 @@ describe.skipIf(!url)("PostgreSQL scan queue", () => {
       expect(await db.activeScanStages(id!)).toEqual(["homepage"]);
       expect(await db.finish(id!, original!.owner, null)).toBe(false);
       expect(await db.finish(id!, replacement!.owner, null)).toBe(true);
-      expect((await db.list("renew-lease.example.com"))[0]).toMatchObject({
+      expect((await db.list(host))[0]).toMatchObject({
         id,
         state: "failed",
       });
-      const cooldown = await db.requestScan(
-        "renew-lease.example.com",
-        null,
-        null,
-      );
+      const cooldown = await db.requestScan(host, null, null);
       expect(cooldown).toMatchObject({
         code: "domain_cooldown",
         retryAfter: expect.any(Number),
@@ -325,33 +337,22 @@ describe.skipIf(!url)("PostgreSQL scan queue", () => {
   it("prioritizes up to three Pro rescans and serves waiting jobs first", async () => {
     const sql = postgres(url!);
     const db = connect(url!);
+    const suffix = randomUUID() + ".example.com";
+    let user = "";
     try {
-      await sql`insert into "user"(id,name,email) values ('priority-user','Priority','priority@example.test')`;
-      await db.applyBillingEvent({
-        id: "priority-paid",
-        time: 1,
-        subscription: "priority-sub",
-        customer: "priority-customer",
-        product: "priority-plan",
-        userId: "priority-user",
-        status: "active",
-        accessUntil: "2099-01-01T00:00:00Z",
-      });
-      const ordinary = await db.enqueue("ordinary-priority.example.com");
-      const firstScan = await db.enqueue(
-        "first-priority.example.com",
-        "manual",
-        "priority-user",
-      );
-      const aging = await db.enqueue("aging-priority.example.com");
+      user = await insertTestUser(sql, "priority-user");
+      await activatePro(db, user);
+      const ordinary = await db.enqueue("ordinary." + suffix);
+      const firstScan = await db.enqueue("first." + suffix, "manual", user);
+      const aging = await db.enqueue("aging." + suffix);
       await sql`update scans set requested_at = now() - interval '11 minutes' where id = ${aging}`;
       const rescans = [];
       for (let index = 0; index < 4; index++) {
-        const domain = `priority-${index}.example.com`;
+        const domain = `priority-${index}.${suffix}`;
         await sql`insert into domains(name) values (${domain})`;
         await sql`insert into scans(id,domain,state,requested_at,report) values
           (${randomUUID()},${domain},'partially_completed',now() - interval '2 hours','{"demo":false}'::jsonb)`;
-        rescans.push(await db.enqueue(domain, "manual", "priority-user"));
+        rescans.push(await db.enqueue(domain, "manual", user));
       }
       for (const id of [
         aging,
@@ -365,6 +366,7 @@ describe.skipIf(!url)("PostgreSQL scan queue", () => {
         await db.finish(job!.id, job!.owner, null);
       }
     } finally {
+      if (user) await sql`delete from "user" where id = ${user}`;
       await db.close();
       await sql.end();
     }

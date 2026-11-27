@@ -34,6 +34,12 @@ export async function PATCH(request: Request) {
       { error: "Invalid preference" },
       { status: 400, headers },
     );
+  // Included watches are part of Pro; turning one off is always allowed.
+  if (parsed.data.enabled && !(await database.hasPro(session.user.id)))
+    return Response.json(
+      { code: "pro_required", error: "Watching with alerts is part of Pro" },
+      { status: 403, headers },
+    );
   const updated = await database.setDocumentAlerts(
     session.user.id,
     parsed.data.domain,

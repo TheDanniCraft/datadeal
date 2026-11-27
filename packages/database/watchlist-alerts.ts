@@ -11,7 +11,15 @@ type Alert = {
   score_after: number | null;
 };
 
-export async function watchlistAlerts(sql: Sql, userId: string) {
+/**
+ * What the latest scans of a watcher's sites found, newest first. Covers Pro
+ * watches (saved sites with alerts) and points watches, from when each started.
+ */
+export async function watchlistAlerts(
+  sql: Sql,
+  userId: string,
+  domainFilter?: string,
+) {
   // Older alerts only saved two numbers. Recheck both adjacent publications,
   // including corrections, before exposing a score change on the account or API.
   function snapshot(alias: "s" | "p") {
@@ -34,12 +42,17 @@ export async function watchlistAlerts(sql: Sql, userId: string) {
       previous: unknown;
       current: unknown;
     })[] = await sql`
-      with candidates as materialized (
-        select a.*
-        from watchlists w join alerts a on a.domain=w.domain and a.created_at >= w.created_at
+      with watched as (
+        select w.domain, w.created_at from watchlists w
         where w.user_id=${userId} and w.document_alerts
           and exists (select 1 from subscriptions sub where sub.user_id=${userId}
             and sub.access_until > now() and sub.status in ('active','canceled','past_due'))
+        union all
+        select m.domain, m.created_at from site_monitors m where m.user_id=${userId}
+      ), candidates as materialized (
+        select a.* from alerts a
+        where exists (select 1 from watched w where w.domain=a.domain and a.created_at >= w.created_at)
+          ${domainFilter ? sql`and a.domain=${domainFilter}` : sql``}
           ${cursor ? sql`and (a.created_at,a.scan_id) < (${cursor.date}::timestamptz,${cursor.id}::uuid)` : sql``}
         order by a.created_at desc, a.scan_id desc limit 50
       )

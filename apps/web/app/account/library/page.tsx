@@ -16,7 +16,7 @@ import {
 } from "../account-ui";
 import { auth } from "../../../lib/auth";
 import { proPlansPath } from "../../../lib/checkout-return";
-import { localPointsEnabled } from "../../../lib/local-reward";
+import { pointsEnabled } from "../../../lib/local-reward";
 import { LocalDate } from "../../../lib/local-date";
 import { database } from "../../../lib/reports";
 import { RecentReportList } from "../../recent-report-list";
@@ -25,6 +25,13 @@ import { RemoveSaved, SaveForm } from "./library-controls";
 import { WatchButton } from "../../report/[domain]/keep-updated";
 
 export const dynamic = "force-dynamic";
+
+const nextCheckFormat: Intl.DateTimeFormatOptions = {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+};
 
 type Rated = {
   domain: string;
@@ -95,15 +102,17 @@ export default async function LibraryPage() {
       </AccountScreen>
     );
   const userId = session.user.id;
-  const points = localPointsEnabled();
-  const [pro, saved, alerts, monitors, unlocked, wallet] = await Promise.all([
-    database.hasPro(userId),
-    database.listWatchlist(userId),
-    database.documentAlerts(userId),
-    points ? database.listWatches(userId) : [],
-    database.unlockedDomains(userId),
-    points ? database.reportPointWallet(userId) : null,
-  ]);
+  const points = pointsEnabled();
+  const [pro, saved, alerts, monitors, stopped, unlocked, wallet] =
+    await Promise.all([
+      database.hasPro(userId),
+      database.listWatchlist(userId),
+      database.documentAlerts(userId),
+      points ? database.listWatches(userId) : [],
+      points ? database.stoppedWatches(userId) : [],
+      database.unlockedDomains(userId),
+      points ? database.reportPointWallet(userId) : null,
+    ]);
   const sites = [
     ...saved.map((item) => ({
       domain: item.domain,
@@ -120,6 +129,20 @@ export default async function LibraryPage() {
         since: null,
         proWatch: false,
       })),
+    // Watches that ran out of points stay listed for 30 days.
+    ...stopped
+      .map((item) => item.domain)
+      .filter(
+        (domain) =>
+          !saved.some((item) => item.domain === domain) &&
+          !monitors.some((watch) => watch.domain === domain),
+      )
+      .map((domain) => ({
+        domain,
+        saved: false,
+        since: null,
+        proWatch: false,
+      })),
   ];
   const [ratings, unlockedReports] = await Promise.all([
     database.latestReports(sites.map((site) => site.domain)),
@@ -127,7 +150,11 @@ export default async function LibraryPage() {
   ]);
   const rating = (domain: string) =>
     ratings.find((item) => item.domain === domain);
-  const proWatches = saved.filter((item) => item.document_alerts).length;
+  const proWatches = pro
+    ? saved.filter((item) => item.document_alerts).length
+    : 0;
+  // Changes are listed for anyone watching a site, with Pro or with points.
+  const anyWatch = proWatches > 0 || monitors.length > 0;
 
   return (
     <AccountScreen
@@ -141,7 +168,7 @@ export default async function LibraryPage() {
           pro
             ? "Watching turns on weekly rescans and an email when the score or privacy documents change."
             : points
-              ? `Saving is free. Watching rechecks a site on a schedule you pick, ${watchCheckCost} points per check.`
+              ? `Saving is free. Watching rechecks a site on a schedule you pick, ${watchCheckCost} points per check, and emails you when it changes.`
               : "Saving is free. Watching with weekly rescans and alerts is part of Pro."
         }
         action={<SaveForm />}
@@ -163,6 +190,9 @@ export default async function LibraryPage() {
               const watch = monitors.find(
                 (item) => item.domain === site.domain,
               );
+              const ended = !watching
+                ? stopped.find((item) => item.domain === site.domain)
+                : undefined;
               return (
                 <AccountRow
                   key={site.domain}
@@ -185,8 +215,27 @@ export default async function LibraryPage() {
                       usePro ? (
                         "Watching · weekly rescans and email alerts"
                       ) : (
-                        `Watching ${watch ? describeWatchSchedule(watch.schedule) : ""} · ${watchCheckCost} points per check`
+                        <>
+                          Watching{" "}
+                          {watch ? describeWatchSchedule(watch.schedule) : ""} ·{" "}
+                          {watchCheckCost} points per check
+                          {watch && (
+                            <>
+                              {" "}
+                              · Next check{" "}
+                              <LocalDate
+                                value={watch.nextCheckAt}
+                                options={nextCheckFormat}
+                              />
+                            </>
+                          )}
+                        </>
                       )
+                    ) : ended ? (
+                      <>
+                        Stopped: not enough points ·{" "}
+                        <LocalDate value={ended.stoppedAt} />
+                      </>
                     ) : site.since ? (
                       <>
                         Saved <LocalDate value={site.since} />
@@ -197,7 +246,18 @@ export default async function LibraryPage() {
                   }
                 >
                   <Score rating={rating(site.domain)} />
-                  {(pro || points) && (
+                  {ended && (
+                    <WatchButton
+                      host={site.domain}
+                      watching={false}
+                      mode="points"
+                      balance={wallet?.balance ?? 0}
+                      saved={site.saved}
+                      schedule={ended.schedule}
+                      label="Start again"
+                    />
+                  )}
+                  {!ended && (pro || points) && (
                     <WatchButton
                       host={site.domain}
                       watching={watching}
@@ -253,7 +313,7 @@ export default async function LibraryPage() {
         )}
       </AccountSection>
 
-      {pro && (
+      {anyWatch && (
         <AccountSection
           title="Changes"
           description="What the latest scans of your watched sites found."

@@ -65,6 +65,8 @@ import { postgresScanArtifacts } from "./scan-artifacts";
 import { scanRewardStorage } from "./scan-rewards";
 import { pointRefreshStorage, refundPointRefresh } from "./point-refresh";
 import { watchlistAlerts } from "./watchlist-alerts";
+import { sendScanAlerts, type AlertMailer } from "./alert-mail";
+export { alertMailer, alertMessage, type AlertMailer } from "./alert-mail";
 
 export type { ApiTokenRecord } from "./api-tokens";
 export type { ScanStage } from "@datadeal/contracts";
@@ -392,6 +394,9 @@ export function connect(url: string, { reusePool = false } = {}) {
           (select access_until from subscriptions limit 0),
           (select document_alerts from watchlists limit 0),
           (select score_after from alerts limit 0),
+          (select row(schedule, next_check_at, charged_at) from site_monitors limit 0),
+          (select sent_at from alert_deliveries limit 0),
+          (select row(kind, schedule) from watch_events limit 0),
           (select preference from privacy_profiles limit 0),
           (select receipt_hash from scan_reward_receipts limit 0),
           (select row(expires_at,account_claim_available) from scan_reward_grants limit 0),
@@ -404,7 +409,13 @@ export function connect(url: string, { reusePool = false } = {}) {
           (select product_id from creem_sandbox_credit_products limit 0)
       `;
     },
+    /** Score and document changes on the sites this account watches. */
     documentAlerts: (userId: string) => watchlistAlerts(sql, userId),
+    /** Emails the watchers of a finished scan's site about its changes. */
+    sendScanAlerts: (
+      scanId: string,
+      mailer: { origin: string; send: AlertMailer },
+    ) => sendScanAlerts(sql, scanId, mailer),
     /** Turns watching (alerts and weekly rescans) on or off for a saved site. */
     async setDocumentAlerts(userId: string, input: string, enabled: boolean) {
       const host = domain.parse(input);
@@ -809,8 +820,12 @@ export function connect(url: string, { reusePool = false } = {}) {
         const outcome = await sql
           .begin(async (tx) => {
             const [watch] = await tx<
-              { schedule: unknown; next_check_at: Date }[]
-            >`select schedule, next_check_at from site_monitors
+              {
+                schedule: unknown;
+                next_check_at: Date;
+                charged_at: Date | null;
+              }[]
+            >`select schedule, next_check_at, charged_at from site_monitors
             where user_id = ${row.user_id} and domain = ${row.domain}
               and next_check_at <= now() for update skip locked`;
             if (!watch) return "waiting" as const;
@@ -827,7 +842,10 @@ export function connect(url: string, { reusePool = false } = {}) {
             and (state in ('queued','fetching')
               or requested_at > now() - make_interval(secs => ${Math.round(freshHours * 3600)}))
             limit 1`;
-            if (!fresh) {
+            // The first check of a new watch is always paid: the watcher
+            // gets a report of their own, not someone else's for free.
+            const pay = !fresh || !watch.charged_at;
+            if (pay) {
               const debit = await applyReportPoints(tx, {
                 userId: row.user_id,
                 delta: -watchCheckCost,
@@ -841,6 +859,9 @@ export function connect(url: string, { reusePool = false } = {}) {
               if (debit === "insufficient") {
                 await tx`delete from site_monitors
                 where user_id = ${row.user_id} and domain = ${row.domain}`;
+                await tx`insert into watch_events(user_id, domain, kind, schedule)
+                values(${row.user_id}, ${row.domain}, 'stopped_insufficient',
+                  ${JSON.stringify(schedule)}::text::jsonb)`;
                 return "stopped" as const;
               }
               const queued = await tx.savepoint((sp) =>
@@ -849,9 +870,10 @@ export function connect(url: string, { reusePool = false } = {}) {
               // Queue full: undo the charge and try again on the next round.
               if (queued.code !== "accepted") throw new WatchRetry();
             }
-            await tx`update site_monitors set next_check_at = ${next.toISOString()}
+            await tx`update site_monitors set next_check_at = ${next.toISOString()},
+              charged_at = case when ${pay}::boolean then now() else charged_at end
             where user_id = ${row.user_id} and domain = ${row.domain}`;
-            return fresh ? ("fresh" as const) : ("charged" as const);
+            return pay ? ("charged" as const) : ("fresh" as const);
           })
           .catch((error: unknown) => {
             if (error instanceof WatchRetry) return "waiting" as const;
@@ -861,7 +883,10 @@ export function connect(url: string, { reusePool = false } = {}) {
       }
       return counts;
     },
-    /** Start a watch, or change its schedule. The first check runs right away. */
+    /**
+     * Start a watch, or change its schedule. The first check of a new watch
+     * runs right away and is paid even when the site was scanned recently.
+     */
     async startMonitoring(
       userId: string,
       input: string,
@@ -893,10 +918,15 @@ export function connect(url: string, { reusePool = false } = {}) {
       await sql`delete from site_monitors where user_id = ${userId}
         and domain = ${domain.parse(input)}`;
     },
-    /** The watch on a site, if any: its schedule and next check. */
+    /**
+     * The watch on a site, if any: its schedule, next check, and when it
+     * started. A watch opens only scans completed at or after `since`.
+     */
     async monitorFor(userId: string, input: string) {
-      const [row] = await sql<{ schedule: unknown; next_check_at: Date }[]>`
-        select schedule, next_check_at from site_monitors
+      const [row] = await sql<
+        { schedule: unknown; next_check_at: Date; created_at: Date }[]
+      >`
+        select schedule, next_check_at, created_at from site_monitors
         where user_id = ${userId} and domain = ${domain.parse(input)}`;
       if (!row) return null;
       const parsed = watchSchedule.safeParse(row.schedule);
@@ -904,19 +934,44 @@ export function connect(url: string, { reusePool = false } = {}) {
         schedule: parsed.success
           ? parsed.data
           : ({ kind: "days", days: 1 } as const),
-        nextCheckAt: row.next_check_at,
+        // The driver hands raw queries' timestamps over as text.
+        nextCheckAt: new Date(row.next_check_at),
+        since: new Date(row.created_at),
       };
     },
-    async isMonitoring(userId: string, input: string) {
-      const [row] = await sql`select 1 from site_monitors
-        where user_id = ${userId} and domain = ${domain.parse(input)}`;
-      return Boolean(row);
-    },
     async listMonitors(userId: string) {
-      const rows = await sql<{ domain: string; schedule: unknown }[]>`
-        select domain, schedule from site_monitors
+      const rows = await sql<{ domain: string }[]>`
+        select domain from site_monitors
         where user_id = ${userId} order by created_at desc, domain`;
       return rows.map((row) => row.domain);
+    },
+    /**
+     * Watches that stopped for lack of points in the last 30 days and were
+     * not started again, newest first.
+     */
+    async stoppedWatches(userId: string) {
+      const rows = await sql<
+        { domain: string; schedule: unknown; created_at: Date }[]
+      >`
+        select * from (
+          select distinct on (e.domain) e.domain, e.schedule, e.created_at
+          from watch_events e
+          where e.user_id = ${userId} and e.kind = 'stopped_insufficient'
+            and e.created_at > now() - interval '30 days'
+            and not exists (select 1 from site_monitors m
+              where m.user_id = e.user_id and m.domain = e.domain)
+          order by e.domain, e.created_at desc
+        ) stopped order by created_at desc, domain`;
+      return rows.map((row) => {
+        const parsed = watchSchedule.safeParse(row.schedule);
+        return {
+          domain: row.domain,
+          schedule: parsed.success
+            ? parsed.data
+            : ({ kind: "days", days: 7 } as const),
+          stoppedAt: new Date(row.created_at),
+        };
+      });
     },
     async listWatches(userId: string) {
       const rows = await sql<
@@ -930,7 +985,7 @@ export function connect(url: string, { reusePool = false } = {}) {
           schedule: parsed.success
             ? parsed.data
             : ({ kind: "days", days: 1 } as const),
-          nextCheckAt: row.next_check_at,
+          nextCheckAt: new Date(row.next_check_at),
         };
       });
     },
@@ -1106,7 +1161,7 @@ export function connect(url: string, { reusePool = false } = {}) {
         select position from waiting where id = ${id}`;
       return row?.position ?? null;
     },
-    /** Spend report points to move a waiting scan to the front of the queue. */
+    /** Spend points to move a waiting scan to the front of the queue. */
     async boostScan(userId: string, scanId: string, pro = false) {
       return sql.begin(async (tx) => {
         await tx`select id from "user" where id = ${userId} for update`;

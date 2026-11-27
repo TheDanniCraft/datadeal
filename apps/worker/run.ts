@@ -12,7 +12,7 @@ import {
 } from "@datadeal/ai";
 import { setTimeout as delay } from "node:timers/promises";
 import { readMetaCookiePolicy } from "./meta-cookie-policy";
-import { connect, type ScanStage } from "@datadeal/database";
+import { alertMailer, connect, type ScanStage } from "@datadeal/database";
 import {
   configuredContentPageLimit,
   isRetryableScanFailure,
@@ -63,6 +63,8 @@ export async function runWorker(
         }
       : undefined;
   const db = connect(databaseUrl);
+  // Alert emails use the account mail transport; without one they are skipped.
+  const mailer = alertMailer();
   let stopping = false;
   let nextCleanupAt = 0;
   let nextMonitoringAt = 0;
@@ -128,8 +130,19 @@ export async function runWorker(
             if (stopping) break;
             await db.enqueue(domain, "watchlist");
           }
-          // Watched sites are rechecked on their own schedule and pay per check.
-          const watches = await db.runDueWatches();
+          // Watched sites are rechecked on their own schedule and pay per
+          // check. Keep going while full batches come back, so hourly
+          // watches do not fall behind (capped per round).
+          const watchLimit = 20;
+          const watches = { charged: 0, fresh: 0, stopped: 0, waiting: 0 };
+          for (let round = 0; round < 20 && !stopping; round++) {
+            const batch = await db.runDueWatches(watchLimit);
+            for (const key of Object.keys(watches) as (keyof typeof watches)[])
+              watches[key] += batch[key];
+            const handled = batch.charged + batch.fresh + batch.stopped;
+            // Waiting watches (queue full, locked) are retried next time.
+            if (handled + batch.waiting < watchLimit || !handled) break;
+          }
           if (watches.charged || watches.stopped || watches.fresh)
             console.info(JSON.stringify({ event: "watches_run", ...watches }));
           for (const domain of await db.dueMonitoredDomains()) {
@@ -436,6 +449,25 @@ export async function runWorker(
           hasReport: published && report !== null,
         }),
       );
+      // Tell watchers what changed. Mail problems never fail the scan.
+      if (published && mailer && report && !report.demo)
+        await db
+          .sendScanAlerts(job.id, mailer)
+          .then((sent) => {
+            if (sent.sent || sent.failed)
+              console.info(
+                JSON.stringify({
+                  event: "scan_alerts_sent",
+                  scanId: job.id,
+                  ...sent,
+                }),
+              );
+          })
+          .catch(() =>
+            console.warn(
+              JSON.stringify({ event: "scan_alerts_failed", scanId: job.id }),
+            ),
+          );
     }
   } finally {
     await db.close();

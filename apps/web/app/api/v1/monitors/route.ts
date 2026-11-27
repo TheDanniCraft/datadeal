@@ -6,10 +6,7 @@ import {
 } from "@datadeal/contracts/watch-schedule";
 import { auth } from "../../../../lib/auth";
 import { database } from "../../../../lib/reports";
-import {
-  localPointsRequest,
-  privateHeaders,
-} from "../../../../lib/point-offer";
+import { pointsRequest, privateHeaders } from "../../../../lib/point-offer";
 
 const body = z.strictObject({
   domain,
@@ -19,7 +16,7 @@ const body = z.strictObject({
 
 /** "Keep me updated": start or stop a points-funded site monitor. */
 export async function POST(request: Request) {
-  const guard = localPointsRequest(request);
+  const guard = pointsRequest(request);
   if (guard || !database) return new Response(null, { status: guard || 503 });
   const session = await auth?.api.getSession({ headers: request.headers });
   if (!session) return Response.json({ code: "unauthorized" }, { status: 401 });
@@ -30,7 +27,8 @@ export async function POST(request: Request) {
     await database.stopMonitoring(session.user.id, input.data.domain);
     return Response.json({ code: "stopped" }, { headers: privateHeaders });
   }
-  const schedule = input.data.schedule ?? { kind: "days" as const, days: 1 };
+  // Same default as the watch window: a weekly recheck.
+  const schedule = input.data.schedule ?? { kind: "days" as const, days: 7 };
   const problem = watchScheduleError(schedule);
   if (problem)
     return Response.json(

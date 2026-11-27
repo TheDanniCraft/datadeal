@@ -76,9 +76,13 @@ export async function AccountOverview({
     points ? database.listMonitors(userId) : [],
   ]);
   const pro = Boolean(billing?.has_access);
-  const watching = pro
-    ? saved.filter((item) => item.document_alerts).length
-    : monitors.length;
+  // Pro watches and points watches together, each site counted once.
+  const watching = new Set([
+    ...(pro
+      ? saved.filter((item) => item.document_alerts).map((item) => item.domain)
+      : []),
+    ...monitors,
+  ]).size;
   const recent = await database.latestReports(unlocked.slice(0, 4));
   const lastPoints = wallet?.activity[0];
 
@@ -168,7 +172,7 @@ export async function AccountOverview({
           >
             {pro
               ? "Pro includes the advanced view of every report."
-              : "Open a report and watch a short ad, or spend report points, to keep its advanced view."}
+              : "Open a report and watch a short ad, or spend points, to keep its advanced view."}
           </AccountEmpty>
         )}
       </Section>
