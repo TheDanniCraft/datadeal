@@ -7,7 +7,9 @@ import {
 } from "../../../lib/checkout-return";
 import { database } from "../../../lib/reports";
 import { AccountForm } from "../account-form";
-import { AccountLink, AccountScreen } from "../account-ui";
+import Link from "next/link";
+import { buttonVariants } from "@heroui/styles";
+import { AccountCard, AccountRow, AccountScreen } from "../account-ui";
 import { CheckoutReturnNotice } from "../billing/checkout-return-notice";
 
 export async function CreditReceipt({ reference }: { reference: string }) {
@@ -39,22 +41,35 @@ export async function CreditReceipt({ reference }: { reference: string }) {
           credits={receipt.credits}
         />
       ) : (
-        <p role="status">
+        <p role="status" className="m-0 text-sm">
           Your purchase record is temporarily unavailable. Keep your receipt and
           refresh this page shortly.
         </p>
       )}
-      {receipt && receipt.status !== "pending" ? (
-        <AccountLink href="/account/developer">View API credits</AccountLink>
-      ) : (
-        <div className="text-sm text-muted">
-          <p>
-            Used another DataDeal account for checkout? Sign out to check this
-            purchase with that account.
-          </p>
-          <AccountForm signedIn />
-        </div>
-      )}
+      <AccountCard>
+        {receipt && receipt.status !== "pending" ? (
+          <AccountRow
+            title="API credits"
+            description="See your balance and credit activity."
+          >
+            <Link
+              className={buttonVariants({ variant: "primary", size: "sm" })}
+              href="/account/developer"
+            >
+              View API credits
+            </Link>
+          </AccountRow>
+        ) : (
+          <AccountRow
+            title="Used another DataDeal account for checkout?"
+            description="Sign out to check this purchase with that account."
+          >
+            <div className="[&>form]:my-0">
+              <AccountForm signedIn />
+            </div>
+          </AccountRow>
+        )}
+      </AccountCard>
     </AccountScreen>
   );
 }

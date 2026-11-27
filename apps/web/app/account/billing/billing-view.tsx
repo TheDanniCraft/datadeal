@@ -1,8 +1,17 @@
 import { headers } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Card } from "@heroui/react/card";
+import { Chip } from "@heroui/react/chip";
+import { buttonVariants } from "@heroui/styles";
+import type { ReactNode } from "react";
 
-import { AccountScreen, AccountLink } from "../account-ui";
+import {
+  AccountCard,
+  AccountRow,
+  AccountScreen,
+  AccountSection,
+  AccountStat,
+} from "../account-ui";
 import { AccountForm } from "../account-form";
 import { getPricing } from "@datadeal/config";
 import { auth } from "../../../lib/auth";
@@ -19,6 +28,62 @@ import {
   type CheckoutReturnQuery,
 } from "../../../lib/checkout-return";
 import { LocalDate } from "../../../lib/local-date";
+
+const smallLink = buttonVariants({ variant: "secondary", size: "sm" });
+
+type StatusColor = "default" | "success" | "warning" | "danger";
+
+/** A plan name with a small status chip beside it. */
+function PlanTitle({
+  name,
+  status,
+  color,
+}: {
+  name: ReactNode;
+  status: string;
+  color: StatusColor;
+}) {
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <span className="text-base font-semibold">{name}</span>
+      <Chip size="sm" variant="soft" color={color}>
+        {status}
+      </Chip>
+    </span>
+  );
+}
+
+const proBenefits = [
+  "Ad-free reports",
+  "Advanced analysis wherever available",
+  "Evidence-backed data flows",
+];
+
+function BenefitList() {
+  return (
+    <ul className="m-0 grid list-none gap-2 p-4 text-sm sm:grid-cols-3">
+      {proBenefits.map((benefit) => (
+        <li key={benefit} className="flex items-start gap-2">
+          <svg
+            className="mt-0.5 shrink-0 text-accent"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m5 12 5 5 9-10" />
+          </svg>
+          {benefit}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export async function BillingView({
   query,
@@ -72,47 +137,73 @@ export async function BillingView({
             receipt={receipt ?? "pending"}
           />
         ) : (
-          <p role="status">
+          <p role="status" className="m-0 text-sm">
             We couldn’t check your subscription. Keep your receipt and refresh
             this page shortly.
           </p>
         )}
-        <div className="space-y-3 text-sm text-muted">
-          <AccountLink secondary href="/account/billing">
-            View account membership
-          </AccountLink>
-          <p>
-            Used another DataDeal account? Sign out to check this receipt with
-            that account.
-          </p>
-          <AccountForm signedIn />
-        </div>
+        <AccountCard>
+          <AccountRow
+            title="Account membership"
+            description="See the plan on this account."
+          >
+            <Link className={smallLink} href="/account/billing">
+              View account membership
+            </Link>
+          </AccountRow>
+          <AccountRow
+            title="Used another DataDeal account?"
+            description="Sign out to check this receipt with that account."
+          >
+            <div className="[&>form]:my-0">
+              <AccountForm signedIn />
+            </div>
+          </AccountRow>
+        </AccountCard>
       </AccountScreen>
     );
   }
   if (!hasSubscription && !choosingPlan) {
+    const expired = billing?.status === "expired";
     return (
       <AccountScreen
         title="Your membership"
         description={`Signed in as ${session.user.email}.`}
         current="/account/billing"
       >
-        <Card className="p-5 md:p-7">
-          <Card.Content className="items-start gap-4">
-            <h2 className="text-xl font-semibold">Free plan</h2>
-            <p>
-              {billing?.status === "expired"
-                ? "Your previous Pro subscription expired."
-                : "This account has no active Pro subscription."}
-            </p>
-            <AccountLink href={proCheckoutReturnPath}>
-              Check a recent purchase
-            </AccountLink>
-            <AccountLink secondary href={proPlansPath}>
-              View Pro plans
-            </AccountLink>
-          </Card.Content>
-        </Card>
+        <AccountSection title="Plan" description="Your current DataDeal plan.">
+          <AccountCard>
+            <AccountRow
+              title={
+                <PlanTitle
+                  name="Free plan"
+                  status={expired ? "Pro expired" : "Current"}
+                  color="default"
+                />
+              }
+              description={
+                expired
+                  ? "Your previous Pro subscription expired."
+                  : "This account has no active Pro subscription."
+              }
+            >
+              <Link
+                className={buttonVariants({ variant: "primary" })}
+                href={proPlansPath}
+              >
+                View Pro plans
+              </Link>
+            </AccountRow>
+            <AccountRow
+              title="Check a recent purchase"
+              description="Bought Pro and it isn’t showing yet? Check your latest checkout."
+            >
+              <Link className={smallLink} href={proCheckoutReturnPath}>
+                Check purchase
+              </Link>
+            </AccountRow>
+          </AccountCard>
+        </AccountSection>
       </AccountScreen>
     );
   }
@@ -128,6 +219,15 @@ export async function BillingView({
       : billing.product_id === checkout.monthly
         ? "Monthly Pro"
         : null);
+  const planStatus: { label: string; color: StatusColor } = billing?.has_access
+    ? billing.status === "canceled"
+      ? { label: "Not renewing", color: "warning" }
+      : billing.status === "past_due"
+        ? { label: "Past due", color: "danger" }
+        : { label: "Active", color: "success" }
+    : billing?.status === "paused"
+      ? { label: "Paused", color: "warning" }
+      : { label: "Awaiting renewal", color: "warning" };
   return (
     <AccountScreen
       title="DataDeal Pro"
@@ -138,90 +238,145 @@ export async function BillingView({
       }
       current={session ? "/account/billing" : undefined}
     >
-      <Card className="p-5 md:p-7">
-        <Card.Content className="items-start gap-4">
-          {reference && receipt && (
-            <CheckoutReturnNotice
-              key={reference}
-              kind="subscription"
-              reference={reference}
-              receipt={receipt}
-            />
-          )}
-          <h2 className="text-xl font-semibold tracking-tight">
-            {hasSubscription
-              ? planName || "Your subscription"
-              : "Pro membership"}
-          </h2>
-          {!hasSubscription && (
-            <p>
-              Explore evidence-backed data flows and deeper findings wherever an
-              advanced report is available.
-            </p>
-          )}
-          {!hasSubscription && !checkout && (
-            <div className="flex flex-wrap gap-x-6 gap-y-2">
-              <span>
-                <strong>{format.format(pricing.monthly / 100)}</strong> / month
-              </span>
-              <span>
-                <strong>{format.format(pricing.yearly / 100)}</strong> / year
-              </span>
-            </div>
-          )}
-          {billing?.has_access ? (
-            billing.status === "canceled" ? (
-              <p>
-                Pro is active until <LocalDate value={billing.access_until} />.
-                Your subscription will not renew.
-              </p>
-            ) : billing.status === "past_due" ? (
-              <p>
-                Payment is past due. Pro access continues until{" "}
-                <LocalDate value={billing.access_until} />.
-              </p>
-            ) : (
-              <p>
-                Pro is active through{" "}
-                {billing && (
-                  <LocalDate
-                    value={billing.access_until}
-                    options={{ dateStyle: "long" }}
+      {reference && receipt && (
+        <CheckoutReturnNotice
+          key={reference}
+          kind="subscription"
+          reference={reference}
+          receipt={receipt}
+        />
+      )}
+      {hasSubscription ? (
+        <>
+          <AccountSection
+            title="Plan"
+            description="Your subscription and when it renews."
+          >
+            <AccountCard>
+              <AccountRow
+                title={
+                  <PlanTitle
+                    name={planName || "Your subscription"}
+                    status={planStatus.label}
+                    color={planStatus.color}
                   />
-                )}
-                . Your reports are ad-free and include the advanced analysis
-                wherever available.
-              </p>
-            )
-          ) : billing?.needs_management ? (
-            <p role="status">
-              {billing.status === "paused"
-                ? "Your Pro subscription is paused."
-                : "Your paid Pro period has ended. We’re waiting for renewal confirmation."}{" "}
-              {portal
-                ? "Manage your existing subscription to check its status and payment details."
-                : "Subscription management is temporarily unavailable. Try again shortly."}
-            </p>
-          ) : !checkout ? (
-            <p>Pro checkout is currently unavailable.</p>
-          ) : (
-            <>
-              <CheckoutButtons
-                monthly={format.format(pricing.monthly / 100)}
-                yearly={format.format(pricing.yearly / 100)}
-                yearlyBestValue={pricing.yearlyBestValue}
-              />
-            </>
-          )}
-          {billing && !billing.has_access && billing.status === "expired" && (
-            <p>Your previous Pro subscription expired.</p>
-          )}
+                }
+                description={
+                  billing?.has_access ? (
+                    billing.status === "canceled" ? (
+                      <>
+                        Pro is active until{" "}
+                        <LocalDate value={billing.access_until} />. Your
+                        subscription will not renew.
+                      </>
+                    ) : billing.status === "past_due" ? (
+                      <>
+                        Payment is past due. Pro access continues until{" "}
+                        <LocalDate value={billing.access_until} />.
+                      </>
+                    ) : (
+                      <>
+                        Pro is active through{" "}
+                        <LocalDate
+                          value={billing.access_until}
+                          options={{ dateStyle: "long" }}
+                        />
+                        .
+                      </>
+                    )
+                  ) : (
+                    <span role="status">
+                      {billing?.status === "paused"
+                        ? "Your Pro subscription is paused."
+                        : "Your paid Pro period has ended. We’re waiting for renewal confirmation."}{" "}
+                      {portal
+                        ? "Manage your existing subscription to check its status and payment details."
+                        : "Subscription management is temporarily unavailable. Try again shortly."}
+                    </span>
+                  )
+                }
+              >
+                {billing?.customer_id && portal && <BillingPortalButton />}
+              </AccountRow>
+              {billing?.has_access && (
+                <AccountRow
+                  title="Data flow"
+                  description="Explore evidence-backed data flows."
+                >
+                  <Link className={smallLink} href="/data-flow">
+                    Explore data flow
+                  </Link>
+                </AccountRow>
+              )}
+            </AccountCard>
+          </AccountSection>
           {billing?.has_access && (
-            <AccountLink href="/data-flow">Explore data flow</AccountLink>
+            <AccountSection
+              title="Included with Pro"
+              description="Your reports are ad-free and include the advanced analysis wherever available."
+            >
+              <AccountCard>
+                <BenefitList />
+              </AccountCard>
+            </AccountSection>
           )}
-          {billing?.customer_id && portal && <BillingPortalButton />}
-        </Card.Content>
-      </Card>
+        </>
+      ) : (
+        <AccountSection
+          title="Pro membership"
+          description="Explore evidence-backed data flows and deeper findings wherever an advanced report is available."
+        >
+          <AccountCard>
+            {billing?.status === "expired" && (
+              <AccountRow
+                title={
+                  <PlanTitle
+                    name="Free plan"
+                    status="Pro expired"
+                    color="default"
+                  />
+                }
+                description="Your previous Pro subscription expired."
+              />
+            )}
+            <BenefitList />
+            {!checkout ? (
+              <>
+                <div className="grid grid-cols-2 divide-x divide-separator">
+                  <AccountStat
+                    label="Monthly"
+                    value={format.format(pricing.monthly / 100)}
+                    note="per month"
+                  />
+                  <AccountStat
+                    label="Yearly"
+                    value={format.format(pricing.yearly / 100)}
+                    note="per year"
+                  />
+                </div>
+                <AccountRow
+                  title="Checkout"
+                  description="Pro checkout is currently unavailable."
+                />
+              </>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 p-4">
+                <div className="grid min-w-0 flex-1 basis-56 gap-0.5">
+                  <div className="text-sm font-medium">Choose how to pay</div>
+                  <div className="text-sm text-muted">
+                    Billed monthly or once a year.
+                  </div>
+                </div>
+                <CheckoutButtons
+                  monthly={format.format(pricing.monthly / 100)}
+                  yearly={format.format(pricing.yearly / 100)}
+                  yearlyBestValue={pricing.yearlyBestValue}
+                />
+              </div>
+            )}
+          </AccountCard>
+        </AccountSection>
+      )}
     </AccountScreen>
   );
 }

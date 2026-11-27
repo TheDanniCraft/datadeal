@@ -12,7 +12,14 @@ import {
 import { AccountForm } from "./account-form";
 import { DeleteAccount } from "./delete-account";
 import { PrivacyProfile } from "./privacy-profile";
-import { AccountIcon, AccountScreen } from "./account-ui";
+import {
+  AccountCard,
+  AccountIcon,
+  AccountRow,
+  AccountScreen,
+  AccountSection,
+} from "./account-ui";
+import { buttonVariants } from "@heroui/styles";
 import { localOutboxName } from "./local-mail";
 import { AccountOverview } from "./overview";
 import { ItemCard } from "@heroui-pro/react/item-card";
@@ -99,33 +106,41 @@ export default async function AccountPage({
       current="/account"
     >
       <AccountOverview userId={session.user.id} points={localPointsEnabled()} />
-      <h2 className="border-t border-separator pt-8 text-lg font-semibold tracking-tight">
-        Settings
-      </h2>
       {profile && (
-        <section className="space-y-3" aria-label="Privacy profile">
-          <h3 className="text-base font-semibold">Privacy profile</h3>
-          <PrivacyProfile saved={profile} />
-        </section>
-      )}
-      <section className="space-y-3">
-        <h3 className="text-base font-semibold">Account data</h3>
-        <p className="text-sm text-muted">
-          Your download includes your profile, Pro billing records, unlocked
-          reports and API credit activity.
-        </p>
-        <a
-          href="/api/v1/account/export"
-          className="text-accent underline underline-offset-2"
+        <AccountSection
+          title="Privacy profile"
+          description="How strictly reports judge what sites do with your data."
         >
-          Download account data
-        </a>
-      </section>
-      <section className="space-y-3">
-        <h3 className="text-base font-semibold">Account access</h3>
-        <AccountForm signedIn />
-        <DeleteAccount localOutbox={outbox} />
-      </section>
+          <PrivacyProfile saved={profile} />
+        </AccountSection>
+      )}
+      <AccountSection title="Settings">
+        <AccountCard>
+          <AccountRow
+            title="Your data"
+            description="Profile, Pro billing records, unlocked reports, points and API credit activity, as one file."
+          >
+            <a
+              href="/api/v1/account/export"
+              className={buttonVariants({ size: "sm", variant: "secondary" })}
+            >
+              Download
+            </a>
+          </AccountRow>
+          <AccountRow
+            title="Sign out"
+            description={"Signed in as " + session.user.email}
+          >
+            <AccountForm signedIn />
+          </AccountRow>
+          <AccountRow
+            title="Delete account"
+            description="We email you a link to confirm. Active subscriptions end first."
+          >
+            <DeleteAccount localOutbox={outbox} />
+          </AccountRow>
+        </AccountCard>
+      </AccountSection>
     </AccountScreen>
   );
 }

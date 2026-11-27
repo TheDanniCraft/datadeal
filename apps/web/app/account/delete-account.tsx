@@ -55,7 +55,11 @@ export function DeleteAccount({
       >
         {token ? "Permanently delete my account" : "Request account deletion"}
       </Button>
-      <p role="status">{notice}</p>
+      {notice && (
+        <p role="status" className="m-0 basis-full text-sm">
+          {notice}
+        </p>
+      )}
     </>
   );
 }

@@ -397,19 +397,22 @@ export function connect(url: string, { reusePool = false } = {}) {
         const [user] =
           await tx`select id from "user" where id = ${userId} for update`;
         if (!user) return "forbidden";
-        const [pro] =
-          await tx`select 1 from subscriptions where user_id = ${userId}
-          and access_until > now() and status in ('active','canceled','past_due') limit 1`;
-        if (!pro) return "forbidden";
+        // Saving is free with an account; watching (alerts, rescans) is not.
         const [existing] =
           await tx`select 1 from watchlists where user_id = ${userId} and domain = ${host}`;
         if (existing) return "saved";
         const [capacity] =
           await tx`select count(*)::int as count from watchlists where user_id = ${userId}`;
         if (Number(capacity.count) >= 100) return "full";
-        await tx`insert into watchlists(user_id, domain) values(${userId}, ${host})`;
+        await tx`insert into domains(name) values(${host}) on conflict do nothing`;
+        await tx`insert into watchlists(user_id, domain, document_alerts) values(${userId}, ${host}, false)`;
         return "saved";
       });
+    },
+    async isSaved(userId: string, input: string) {
+      const [row] = await sql`select 1 from watchlists
+        where user_id = ${userId} and domain = ${domain.parse(input)}`;
+      return Boolean(row);
     },
     async removeWatchlistDomain(userId: string, input: string) {
       await sql`delete from watchlists where user_id = ${userId} and domain = ${domain.parse(input)}`;

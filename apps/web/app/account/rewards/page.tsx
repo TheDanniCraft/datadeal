@@ -3,7 +3,14 @@ import { headers } from "next/headers";
 import { auth } from "../../../lib/auth";
 import { localPointsEnabled } from "../../../lib/local-reward";
 import { database } from "../../../lib/reports";
-import { AccountScreen } from "../account-ui";
+import {
+  AccountCard,
+  AccountRow,
+  AccountScreen,
+  AccountSection,
+  AccountStat,
+} from "../account-ui";
+import { defaultReportPointCost } from "@datadeal/contracts/paper-plane";
 import { pointOperations as operations } from "./operations";
 import { LocalDate } from "../../../lib/local-date";
 import { RewardFromQuery } from "../../rewards/reward-modal";
@@ -19,45 +26,49 @@ export default async function RewardsWallet() {
       description="Points open advanced reports without an ad. Earn them by flying the paper plane."
       current="/account/rewards"
     >
-      <div>
-        <p className="text-sm text-muted">Available balance</p>
-        <p className="text-5xl font-semibold tabular-nums">
-          {wallet.balance}{" "}
-          <span className="text-lg">
-            {wallet.balance === 1 ? "point" : "points"}
-          </span>
-        </p>
-      </div>
+      <AccountCard>
+        <AccountStat
+          label="Available balance"
+          value={
+            <>
+              {wallet.balance}{" "}
+              <span className="text-sm font-normal text-muted">
+                {wallet.balance === 1 ? "point" : "points"}
+              </span>
+            </>
+          }
+          note={`An unlock costs ${defaultReportPointCost} points.`}
+        />
+      </AccountCard>
       <FlyForPoints freeFlights={wallet.tickets.map((ticket) => ticket.id)} />
       <RewardFromQuery signedIn />
-      <section>
-        <h2 className="mb-2 text-xl">Recent activity</h2>
+      <AccountSection title="Recent activity">
         {wallet.activity.length ? (
-          <ul className="divide-y divide-separator">
+          <AccountCard>
             {wallet.activity.map((entry) => (
-              <li
-                className="flex items-baseline justify-between gap-3 py-3"
+              <AccountRow
                 key={entry.id}
+                title={operations[entry.operation] ?? "Report points"}
+                description={<LocalDate value={entry.created_at} />}
               >
-                <span>
-                  {operations[entry.operation] ?? "Report points"}{" "}
-                  <small className="text-muted">
-                    <LocalDate value={entry.created_at} />
-                  </small>
-                </span>
-                <strong className="tabular-nums">
+                <span
+                  className={
+                    "text-sm font-semibold tabular-nums " +
+                    (entry.delta > 0 ? "text-success" : "")
+                  }
+                >
                   {entry.delta > 0 ? "+" : ""}
                   {entry.delta}
-                </strong>
-              </li>
+                </span>
+              </AccountRow>
             ))}
-          </ul>
+          </AccountCard>
         ) : (
-          <p className="text-sm text-muted">
+          <p className="m-0 text-sm text-muted">
             Your first earned or spent points will appear here.
           </p>
         )}
-      </section>
+      </AccountSection>
     </AccountScreen>
   );
 }

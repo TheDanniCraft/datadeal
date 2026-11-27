@@ -33,7 +33,11 @@ export function BillingPortalButton() {
       >
         Manage subscription
       </Button>
-      {error && <p role="status">{error}</p>}
+      {error && (
+        <p role="status" className="m-0 basis-full text-sm text-danger">
+          {error}
+        </p>
+      )}
     </>
   );
 }

@@ -66,7 +66,10 @@ export function CheckoutButtons({
       >
         {yearly} yearly{yearlyBestValue && " · Best value"}
       </Button>
-      <p role="status" className="basis-full empty:hidden">
+      <p
+        role="status"
+        className="m-0 basis-full text-sm text-danger empty:hidden"
+      >
         {notice}
       </p>
     </div>
@@ -84,13 +87,18 @@ export function CreditPackCheckout({
   return (
     <>
       <Button
-        variant="secondary"
+        variant="primary"
         onPress={() => void checkout("api-credits")}
         isDisabled={busy}
       >
         Buy {credits} test credits for {price}
       </Button>
-      <p role="status">{notice}</p>
+      <p
+        role="status"
+        className="m-0 basis-full text-sm text-danger empty:hidden"
+      >
+        {notice}
+      </p>
     </>
   );
 }

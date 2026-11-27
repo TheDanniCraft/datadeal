@@ -18,7 +18,7 @@ export function AccountForm({
   const router = useRouter();
   return (
     <Form
-      className={signedIn ? "my-3 items-start" : "mt-3 grid gap-4"}
+      className={signedIn ? "items-start" : "mt-3 grid gap-4"}
       onSubmit={async (event) => {
         event.preventDefault();
         const email = new FormData(event.currentTarget).get("email");

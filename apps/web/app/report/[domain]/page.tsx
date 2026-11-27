@@ -156,6 +156,17 @@ export default async function ReportPage({
       ? await database.isMonitoring(session.user.id, host)
       : false;
   const scanReward = localReward || accountReward || monitoring;
+  const saved =
+    session && database
+      ? await database.isSaved(session.user.id, host)
+      : undefined;
+  // Pro watches are saved sites with alerts on.
+  const proWatching =
+    pro && session && database && saved
+      ? (await database.listWatchlist(session.user.id)).some(
+          (item) => item.domain === host && item.document_alerts,
+        )
+      : false;
   const advanced =
     pro ||
     scanReward ||
@@ -463,10 +474,19 @@ export default async function ReportPage({
         }
         blocked={blockedScan}
         queuePosition={queuePosition ?? undefined}
+        saved={saved}
         keepUpdated={
-          session && !pro && localPointsEnabled() && report && !report.demo
-            ? { monitoring, balance: pointBalance }
-            : undefined
+          !session || !report || report.demo
+            ? undefined
+            : pro
+              ? { mode: "pro", watching: proWatching, balance: 0 }
+              : localPointsEnabled()
+                ? {
+                    mode: "points",
+                    watching: monitoring,
+                    balance: pointBalance,
+                  }
+                : undefined
         }
         boost={
           session && !pro && localPointsEnabled() && current === "queued"

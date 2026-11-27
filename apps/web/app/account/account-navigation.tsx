@@ -7,8 +7,7 @@ const sections = [
   ["Overview", "/account", "account"],
   ["Billing and Pro", "/account/billing", "billing"],
   ["Developer API", "/account/developer", "developer"],
-  ["Watchlist", "/account/watchlist", "watchlist"],
-  ["Alerts", "/account/alerts", "alerts"],
+  ["Library", "/account/library", "watchlist"],
 ] as const satisfies readonly (readonly [string, string, AccountSymbol])[];
 export function AccountNavigation({ current }: { current: string }) {
   const available =

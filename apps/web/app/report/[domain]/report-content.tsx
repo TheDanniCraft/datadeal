@@ -22,7 +22,8 @@ import { ScanProgress } from "./scan-progress";
 import { ProviderDisclosure } from "../../data-flow/provider-lookup";
 import { RewardedAdTest } from "./rewarded-ad-test";
 import { BoostScan } from "./boost-scan";
-import { KeepUpdated } from "./keep-updated";
+import { WatchButton } from "./keep-updated";
+import { SaveSite } from "../../account/library/library-controls";
 import { LocalDate, useTimeZone } from "../../../lib/local-date";
 import { useClientReady } from "../../use-client-ready";
 import type { publicPolicyHighlights } from "../../../lib/policy-highlights";
@@ -1941,6 +1942,7 @@ export function ReportContent({
   queuePosition,
   boost,
   keepUpdated,
+  saved,
   browserScan,
   activeStages,
   previousRewardedScan,
@@ -1984,7 +1986,13 @@ export function ReportContent({
   /** Report points to skip the scan queue, for signed-in visitors. */
   boost?: { scanId: string; balance: number };
   /** Points-funded weekly rescans for signed-in visitors. */
-  keepUpdated?: { monitoring: boolean; balance: number };
+  keepUpdated?: {
+    watching: boolean;
+    mode: "pro" | "points";
+    balance: number;
+  };
+  /** Free saving to the library, for signed-in visitors. */
+  saved?: boolean;
   /** Set when the site blocks the scanner: run it in a visitor's browser. */
   browserScan?: {
     signedIn: boolean;
@@ -2988,8 +2996,11 @@ export function ReportContent({
           </span>
           <div className="flex shrink-0 items-center gap-0.5">
             {hasUsableReport && (archived || scanAvailable) && scanAction}
+            {!archived && saved !== undefined && (
+              <SaveSite domain={host} saved={saved} />
+            )}
             {!archived && hasUsableReport && keepUpdated && (
-              <KeepUpdated host={host} {...keepUpdated} />
+              <WatchButton host={host} saved={saved} {...keepUpdated} />
             )}
             {!archived && <ReportCompare host={host} />}
           </div>

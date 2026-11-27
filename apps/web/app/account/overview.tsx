@@ -7,7 +7,6 @@ import { RecentReportList } from "../recent-report-list";
 import { AccountEmpty, AccountIcon } from "./account-ui";
 import type { AccountSymbol } from "./account-icon";
 import { pointOperations } from "./rewards/operations";
-import { monitorDailyCost } from "@datadeal/contracts/paper-plane";
 import { LocalDate } from "../../lib/local-date";
 
 function Tile({
@@ -52,7 +51,7 @@ function Section({
   return (
     <section className="grid gap-3">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="m-0 text-lg font-semibold tracking-tight">{title}</h2>
+        <h2 className="m-0 text-base font-semibold">{title}</h2>
         {action}
       </div>
       {children}
@@ -69,7 +68,7 @@ export async function AccountOverview({
   points: boolean;
 }) {
   if (!database) return null;
-  const [billing, wallet, unlocked, watchlist, monitors] = await Promise.all([
+  const [billing, wallet, unlocked, saved, monitors] = await Promise.all([
     database.billingSummary(userId),
     points ? database.reportPointWallet(userId) : null,
     database.unlockedDomains(userId),
@@ -77,14 +76,10 @@ export async function AccountOverview({
     points ? database.listMonitors(userId) : [],
   ]);
   const pro = Boolean(billing?.has_access);
-  const watched = watchlist.map((item) => item.domain);
-  const [unlockedReports, watchedReports, monitoredReports] = await Promise.all(
-    [
-      database.latestReports(unlocked),
-      database.latestReports(watched.slice(0, 6)),
-      database.latestReports(monitors),
-    ],
-  );
+  const watching = pro
+    ? saved.filter((item) => item.document_alerts).length
+    : monitors.length;
+  const recent = await database.latestReports(unlocked.slice(0, 4));
   const lastPoints = wallet?.activity[0];
 
   return (
@@ -120,24 +115,18 @@ export async function AccountOverview({
           />
         )}
         <Tile
-          href="#unlocked-reports"
+          href="/account/library"
+          icon="watchlist"
+          label="Saved sites"
+          value={String(saved.length)}
+          note={watching ? `${watching} watched` : "in your library"}
+        />
+        <Tile
+          href="/account/library"
           icon="docs"
           label="Unlocked reports"
           value={pro ? "All" : String(unlocked.length)}
-          note={pro ? "included with Pro" : "advanced reports"}
-        />
-        <Tile
-          href="/account/watchlist"
-          icon="watchlist"
-          label="Watchlist"
-          value={String(watched.length)}
-          note={
-            pro
-              ? watched.length === 1
-                ? "site you follow"
-                : "sites you follow"
-              : "needs Pro"
-          }
+          note={pro ? "included with Pro" : "in your library"}
         />
       </div>
 
@@ -160,58 +149,29 @@ export async function AccountOverview({
         </div>
       )}
 
-      <div id="unlocked-reports" className="scroll-mt-24">
-        <Section title="Unlocked reports">
-          {unlockedReports.length ? (
-            <RecentReportList reports={unlockedReports} />
-          ) : (
-            <AccountEmpty
-              symbol="docs"
-              title={
-                pro ? "Every report is open to you" : "No unlocked reports yet"
-              }
-            >
-              {pro
-                ? "Pro includes the advanced view of every report."
-                : "Open a report and watch a short ad, or spend report points, to see its advanced view."}
-            </AccountEmpty>
-          )}
-        </Section>
-      </div>
-
-      {monitoredReports.length > 0 && (
-        <Section title="Kept updated">
-          <p className="m-0 -mt-1 text-sm text-muted">
-            Rescanned every week for {monitorDailyCost} points a day each. Stop
-            from the report&apos;s Keep updated button.
-          </p>
-          <RecentReportList reports={monitoredReports} />
-        </Section>
-      )}
-
-      {pro && (
-        <Section
-          title="Watchlist"
-          action={
-            watched.length > 0 && (
-              <Link className="inline-link text-sm" href="/account/watchlist">
-                {watched.length > watchedReports.length
-                  ? `Manage all ${watched.length}`
-                  : "Manage"}
-              </Link>
-            )
-          }
-        >
-          {watchedReports.length ? (
-            <RecentReportList reports={watchedReports} />
-          ) : (
-            <AccountEmpty symbol="watchlist" title="You follow no sites yet">
-              Save a site from its report to see its rating here and get an
-              email when its privacy documents change.
-            </AccountEmpty>
-          )}
-        </Section>
-      )}
+      <Section
+        title="Recently unlocked"
+        action={
+          <Link className="inline-link text-sm" href="/account/library">
+            Open library
+          </Link>
+        }
+      >
+        {recent.length ? (
+          <RecentReportList reports={recent} />
+        ) : (
+          <AccountEmpty
+            symbol="docs"
+            title={
+              pro ? "Every report is open to you" : "No unlocked reports yet"
+            }
+          >
+            {pro
+              ? "Pro includes the advanced view of every report."
+              : "Open a report and watch a short ad, or spend report points, to keep its advanced view."}
+          </AccountEmpty>
+        )}
+      </Section>
     </div>
   );
 }

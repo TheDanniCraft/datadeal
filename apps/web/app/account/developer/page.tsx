@@ -1,6 +1,13 @@
 import Link from "next/link";
-import { Card } from "@heroui/react/card";
-import { AccountIcon, AccountLink, AccountScreen } from "../account-ui";
+import {
+  AccountCard,
+  AccountIcon,
+  AccountLink,
+  AccountRow,
+  AccountScreen,
+  AccountSection,
+  AccountStat,
+} from "../account-ui";
 import { ApiRates, ApiExample } from "../../developers/api-reference";
 import { headers } from "next/headers";
 import { auth } from "../../../lib/auth";
@@ -8,6 +15,7 @@ import { purchasableCreditPack } from "../../../lib/billing";
 import { customerCreditSummary } from "../../../lib/customer-credit-summary";
 import {
   developerApiPreview,
+  developerReportReadCost,
   developerScanCost,
 } from "../../../lib/developer-token";
 import { database } from "../../../lib/reports";
@@ -22,6 +30,25 @@ import {
 import { LocalDate } from "../../../lib/local-date";
 
 export const dynamic = "force-dynamic";
+
+function creditCost(amount: number | null) {
+  return amount === null
+    ? "Unavailable"
+    : amount + (amount === 1 ? " credit" : " credits");
+}
+
+function Amount({ value }: { value: string }) {
+  return (
+    <span
+      className={
+        "text-sm font-semibold tabular-nums " +
+        (value.startsWith("+") ? "text-success" : "")
+      }
+    >
+      {value}
+    </span>
+  );
+}
 
 const activityLabels = {
   pack: "Credit pack purchase",
@@ -105,138 +132,216 @@ export default async function DeveloperAccountPage({
       description="Create scoped tokens and track the credits you use for reports and scans."
       current="/account/developer"
     >
-      <Card className="p-5">
-        <Card.Content className="items-start gap-4">
-          <ApiRates />
-          <Link
-            className="text-accent underline underline-offset-2"
-            href="/developers"
-          >
-            API documentation <span aria-hidden="true">→</span>
-          </Link>
-        </Card.Content>
-      </Card>
+      {tokens && legacy && wallet && (
+        <AccountSection
+          title="Credits"
+          description="Prepaid credits cover saved reports and new scans. API credits are separate from a Pro subscription."
+        >
+          <AccountCard>
+            <div className="flex flex-wrap items-center justify-between gap-4 p-4">
+              <div className="grid min-w-0 gap-1">
+                <span className="text-xs text-muted">Balance</span>
+                {wallet.state === "unavailable" ? (
+                  <span className="text-sm">
+                    Your credit balance is temporarily unavailable.
+                  </span>
+                ) : (
+                  <span className="text-3xl leading-none font-semibold tabular-nums">
+                    {wallet.balance}
+                    <span className="ml-1.5 text-sm font-normal text-muted">
+                      credits
+                    </span>
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {!session.user.emailVerified ? (
+                  <span className="text-sm text-muted">
+                    Verify your email before buying API credits.
+                  </span>
+                ) : pack && wallet.state !== "unavailable" ? (
+                  <CreditPackCheckout
+                    credits={pack.credits}
+                    price={new Intl.NumberFormat("en-IE", {
+                      style: "currency",
+                      currency: "EUR",
+                    }).format(pack.price / 100)}
+                  />
+                ) : (
+                  <span className="text-sm text-muted">
+                    Credit packs are currently unavailable.
+                  </span>
+                )}
+              </div>
+            </div>
+          </AccountCard>
+        </AccountSection>
+      )}
+      <AccountSection
+        title="Prices"
+        description={
+          <>
+            What each request costs. Checking a scan’s status is free. See the{" "}
+            <Link
+              className="text-accent underline-offset-2 hover:underline"
+              href="/developers"
+            >
+              API documentation
+            </Link>
+            .
+          </>
+        }
+      >
+        <AccountCard>
+          <div className="grid divide-y divide-separator sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <AccountStat label="Current report" value="Free" />
+            <AccountStat
+              label="Saved report"
+              value={creditCost(developerReportReadCost)}
+            />
+            <AccountStat
+              label="New scan"
+              value={creditCost(developerScanCost)}
+            />
+          </div>
+        </AccountCard>
+      </AccountSection>
       {tokens && legacy && wallet ? (
         <>
-          <section className="space-y-4" aria-labelledby="api-credit-activity">
-            <h2 id="api-credit-activity">API credits</h2>
-            {wallet.state === "unavailable" ? (
-              <p>Your credit balance is temporarily unavailable.</p>
-            ) : (
-              <p>
-                Balance: <strong>{wallet.balance}</strong>
-              </p>
-            )}
-            {!session.user.emailVerified ? (
-              <p>Verify your email before buying API credits.</p>
-            ) : pack && wallet.state !== "unavailable" ? (
-              <CreditPackCheckout
-                credits={pack.credits}
-                price={new Intl.NumberFormat("en-IE", {
-                  style: "currency",
-                  currency: "EUR",
-                }).format(pack.price / 100)}
-              />
-            ) : (
-              <p>Credit packs are currently unavailable.</p>
-            )}
-            {wallet.entries.length > 0 && (
-              <ul className="divide-y divide-separator [&>li]:space-y-2 [&>li]:py-4">
-                {wallet.entries.map((entry) => {
-                  const item = activityByTransaction.get(entry.transactionId);
-                  return (
-                    <li key={entry.id}>
-                      <strong>
-                        {item
-                          ? activityLabels[item.kind]
-                          : entry.side === "credit"
-                            ? "Credits added"
-                            : "Credits deducted"}
-                      </strong>
-                      {entry.side === "credit" ? "+" : "−"}
-                      {entry.amount}
-                      <p>
-                        {item &&
-                          item.kind !== "pack" &&
-                          item.kind !== "pack_refund" &&
-                          item.context + " · "}
-                        <time dateTime={entry.createdAt}>
-                          {new Date(entry.createdAt)
-                            .toISOString()
-                            .slice(0, 16)
-                            .replace("T", " ")}{" "}
-                          UTC
-                        </time>
-                      </p>
-                      <AccountDetails label="Transaction details">
-                        {item &&
-                          (item.kind === "pack" ||
-                            item.kind === "pack_refund") && (
-                            <p>
-                              Order <code>{item.context}</code>
-                            </p>
-                          )}
-                        <p>
-                          Transaction <code>{entry.transactionId}</code>
-                        </p>
-                      </AccountDetails>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {wallet.state !== "unavailable" &&
-              !wallet.entries.length &&
-              !legacy.entries.length && <p>No credit activity yet.</p>}
-            {legacy.entries.length > 0 && (
-              <>
-                <h3 className="pt-5 text-lg font-semibold">
-                  Earlier credit activity
-                </h3>
-                <p>Earlier balance: {legacy.balance}.</p>
-                <ul className="divide-y divide-separator [&>li]:space-y-2 [&>li]:py-4">
-                  {legacy.entries.map((entry) => (
-                    <li key={entry.id}>
-                      <strong>
-                        {entry.kind === "purchase"
-                          ? "Credit purchase"
-                          : entry.kind === "scan_refund"
-                            ? "Failed-scan refund"
-                            : entry.kind === "payment_refund"
-                              ? "Credit pack refund"
-                              : entry.scanId
-                                ? "Scan request"
-                                : entry.domain
-                                  ? "Report read"
-                                  : "API usage"}
-                      </strong>
-                      {" · "}
-                      {entry.delta > 0 ? "+" : ""}
-                      {entry.delta}
-                      <p>
-                        {entry.domain && entry.domain + " · "}
-                        <time dateTime={entry.createdAt}>
-                          <LocalDate value={entry.createdAt} />
-                        </time>
-                      </p>
-                      <AccountDetails label="Transaction details">
-                        <p>
-                          Reference <code>{entry.reference}</code>
-                        </p>
-                      </AccountDetails>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </section>
           <ApiTokens
             records={tokens}
             scansEnabled={developerApiPreview && developerScanCost !== null}
           />
+          <AccountSection
+            title="Credit activity"
+            description="Purchases, refunds and the credits your requests used."
+          >
+            <AccountCard>
+              {wallet.entries.map((entry) => {
+                const item = activityByTransaction.get(entry.transactionId);
+                return (
+                  <AccountRow
+                    key={entry.id}
+                    title={
+                      item
+                        ? activityLabels[item.kind]
+                        : entry.side === "credit"
+                          ? "Credits added"
+                          : "Credits deducted"
+                    }
+                    description={
+                      <>
+                        <span className="block">
+                          {item &&
+                            item.kind !== "pack" &&
+                            item.kind !== "pack_refund" &&
+                            item.context + " · "}
+                          <time dateTime={entry.createdAt}>
+                            {new Date(entry.createdAt)
+                              .toISOString()
+                              .slice(0, 16)
+                              .replace("T", " ")}{" "}
+                            UTC
+                          </time>
+                        </span>
+                        <AccountDetails label="Transaction details">
+                          {item &&
+                            (item.kind === "pack" ||
+                              item.kind === "pack_refund") && (
+                              <p className="m-0">
+                                Order <code>{item.context}</code>
+                              </p>
+                            )}
+                          <p className="m-0">
+                            Transaction <code>{entry.transactionId}</code>
+                          </p>
+                        </AccountDetails>
+                      </>
+                    }
+                  >
+                    <Amount
+                      value={
+                        (entry.side === "credit" ? "+" : "−") + entry.amount
+                      }
+                    />
+                  </AccountRow>
+                );
+              })}
+              {wallet.state !== "unavailable" &&
+                !wallet.entries.length &&
+                !legacy.entries.length && (
+                  <AccountRow
+                    title="No credit activity yet"
+                    description="Purchases and API usage will appear here."
+                  />
+                )}
+              {wallet.state === "unavailable" && !wallet.entries.length && (
+                <AccountRow
+                  title="Activity unavailable"
+                  description="Your credit activity is temporarily unavailable."
+                />
+              )}
+              {wallet.state !== "unavailable" &&
+                !wallet.entries.length &&
+                legacy.entries.length > 0 && (
+                  <AccountRow
+                    title="No recent credit activity"
+                    description="Your earlier activity is listed below."
+                  />
+                )}
+            </AccountCard>
+          </AccountSection>
+          {legacy.entries.length > 0 && (
+            <AccountSection
+              title="Earlier credit activity"
+              description={<>Earlier balance: {legacy.balance}.</>}
+            >
+              <AccountCard>
+                {legacy.entries.map((entry) => (
+                  <AccountRow
+                    key={entry.id}
+                    title={
+                      entry.kind === "purchase"
+                        ? "Credit purchase"
+                        : entry.kind === "scan_refund"
+                          ? "Failed-scan refund"
+                          : entry.kind === "payment_refund"
+                            ? "Credit pack refund"
+                            : entry.scanId
+                              ? "Scan request"
+                              : entry.domain
+                                ? "Report read"
+                                : "API usage"
+                    }
+                    description={
+                      <>
+                        <span className="block">
+                          {entry.domain && entry.domain + " · "}
+                          <time dateTime={entry.createdAt}>
+                            <LocalDate value={entry.createdAt} />
+                          </time>
+                        </span>
+                        <AccountDetails label="Transaction details">
+                          <p className="m-0">
+                            Reference <code>{entry.reference}</code>
+                          </p>
+                        </AccountDetails>
+                      </>
+                    }
+                  >
+                    <Amount
+                      value={(entry.delta > 0 ? "+" : "") + entry.delta}
+                    />
+                  </AccountRow>
+                ))}
+              </AccountCard>
+            </AccountSection>
+          )}
         </>
       ) : (
-        <p>Developer account data is temporarily unavailable.</p>
+        <p role="status" className="m-0 text-sm text-muted">
+          Developer account data is temporarily unavailable.
+        </p>
       )}
     </AccountScreen>
   );

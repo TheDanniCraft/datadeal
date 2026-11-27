@@ -1,10 +1,11 @@
 "use client";
 
-import { Button, Form, Input, Label } from "@heroui/react";
+import { Button, Chip, Form, Input, Label } from "@heroui/react";
 import type { ApiTokenRecord } from "@datadeal/database";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LocalDate } from "../../../lib/local-date";
+import { AccountCard, AccountRow, AccountSection } from "../account-ui";
 
 export function ApiTokens({
   records,
@@ -55,17 +56,13 @@ export function ApiTokens({
   }
 
   return (
-    <>
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold tracking-tight">
-          Create an API token
-        </h2>
-        <p>
-          Give each integration its own token so you can rotate or revoke access
-          individually.
-        </p>
+    <AccountSection
+      title="API tokens"
+      description="Give each integration its own token so you can rotate or revoke access individually."
+    >
+      <AccountCard>
         <Form
-          className="grid max-w-md gap-3"
+          className="flex flex-wrap items-end gap-3 p-4"
           onSubmit={(event) => {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
@@ -80,13 +77,17 @@ export function ApiTokens({
             });
           }}
         >
-          <Label htmlFor="developer-token-label">Token name</Label>
-          <Input
-            id="developer-token-label"
-            name="label"
-            maxLength={64}
-            required
-          />
+          <div className="grid min-w-0 flex-1 basis-56 gap-1.5">
+            <Label htmlFor="developer-token-label">Token name</Label>
+            <Input
+              id="developer-token-label"
+              name="label"
+              className="w-full"
+              placeholder="My integration"
+              maxLength={64}
+              required
+            />
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" isDisabled={busy}>
               Create token
@@ -103,25 +104,40 @@ export function ApiTokens({
             )}
           </div>
         </Form>
-      </section>
-      <p role="status">{notice}</p>
-      {token && (
-        <section className="space-y-3" aria-label="New API token">
-          <h2 className="text-xl font-semibold tracking-tight">
-            Copy your token now
-          </h2>
-          <p>DataDeal only shows the full token once.</p>
-          <Input aria-label="New API token" value={token} readOnly />
-        </section>
-      )}
-      <section className="space-y-3">
-        <h2 className="text-xl font-semibold tracking-tight">API tokens</h2>
+        <p role="status" className="m-0 px-4 py-3 text-sm empty:hidden">
+          {notice}
+        </p>
+        {token && (
+          <section
+            className="grid gap-2 bg-surface p-4"
+            aria-label="New API token"
+          >
+            <h3 className="m-0 text-sm font-semibold">Copy your token now</h3>
+            <p className="m-0 text-sm text-muted">
+              DataDeal only shows the full token once.
+            </p>
+            <Input
+              aria-label="New API token"
+              className="w-full font-mono"
+              value={token}
+              readOnly
+            />
+          </section>
+        )}
         {records.length ? (
-          <ul className="divide-y divide-separator [&>li]:space-y-2 [&>li]:py-4">
-            {records.map((item) => (
-              <li key={item.id}>
-                <strong>{item.label}</strong> · {item.scope}
-                <p className="text-sm text-muted">
+          records.map((item) => (
+            <AccountRow
+              key={item.id}
+              title={
+                <span className="flex flex-wrap items-center gap-2">
+                  {item.label}
+                  <Chip size="sm" variant="soft">
+                    {item.scope}
+                  </Chip>
+                </span>
+              }
+              description={
+                <>
                   Created <LocalDate value={item.createdAt} />
                   {item.lastUsedAt && (
                     <>
@@ -129,38 +145,44 @@ export function ApiTokens({
                       · Last used <LocalDate value={item.lastUsedAt} />
                     </>
                   )}
-                </p>
-                {item.revokedAt ? (
-                  <p>Revoked</p>
-                ) : (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      isDisabled={busy}
-                      aria-label={"Rotate " + item.label}
-                      onPress={() => void update("PATCH", { id: item.id })}
-                    >
-                      Rotate
-                    </Button>{" "}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      isDisabled={busy}
-                      aria-label={"Revoke " + item.label}
-                      onPress={() => void update("DELETE", { id: item.id })}
-                    >
-                      Revoke
-                    </Button>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
+                </>
+              }
+            >
+              {item.revokedAt ? (
+                <Chip size="sm" variant="soft" color="danger">
+                  Revoked
+                </Chip>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    isDisabled={busy}
+                    aria-label={"Rotate " + item.label}
+                    onPress={() => void update("PATCH", { id: item.id })}
+                  >
+                    Rotate
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    isDisabled={busy}
+                    aria-label={"Revoke " + item.label}
+                    onPress={() => void update("DELETE", { id: item.id })}
+                  >
+                    Revoke
+                  </Button>
+                </>
+              )}
+            </AccountRow>
+          ))
         ) : (
-          <p>No API tokens yet.</p>
+          <AccountRow
+            title="No API tokens yet"
+            description="Create a token above to start using the API."
+          />
         )}
-      </section>
-    </>
+      </AccountCard>
+    </AccountSection>
   );
 }
