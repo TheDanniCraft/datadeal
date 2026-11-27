@@ -32,7 +32,7 @@ const endpoints = [
     "GET",
     "/scans/status/:id",
     "scans:request",
-    "Check your scan by ID. The status includes a report path when the result is published. Status checks are free.",
+    "Check your scan by ID. The status includes the points charged and refunded, and a report path when the result is published. Status checks are free.",
   ],
 ] as const;
 export default function DevelopersPage() {
@@ -56,7 +56,7 @@ export default function DevelopersPage() {
           className="grid grid-cols-2 gap-3 text-sm md:sticky md:top-5 md:grid-cols-1"
         >
           <a href="#authentication">Authentication</a>
-          <a href="#usage">Usage and credits</a>
+          <a href="#usage">Usage and points</a>
           <a href="#endpoints">Endpoints</a>
           <a href="#errors">Errors and retries</a>
         </nav>
@@ -78,14 +78,15 @@ export default function DevelopersPage() {
           </section>
           <section id="usage">
             <h2 className="text-xl font-semibold tracking-tight">
-              Usage and credits
+              Usage and points
             </h2>
             <ApiRates />
             <p>
-              API credits are bought separately from a Pro subscription. Your
-              developer account shows the balance, debits and refunds. Failed or
-              unusable scans are refunded automatically, and retries aren't
-              charged twice.
+              Requests are paid with points, the same points that open reports
+              on the site. Buy a pack or earn them by flying the paper plane.
+              Your developer account shows the balance and the points each
+              request used. Failed or unusable scans are refunded automatically,
+              and retries aren't charged twice.
             </p>
           </section>
           <section id="endpoints">
@@ -121,7 +122,10 @@ export default function DevelopersPage() {
             <dl className="divide-y divide-separator">
               {[
                 ["401 / 403", "Check the token and its scope."],
-                ["402", "The account has insufficient credits."],
+                [
+                  "402",
+                  "The account has too few points. The response names the points required.",
+                ],
                 [
                   "409",
                   "Check whether the key was used for another request or a scan is already running.",

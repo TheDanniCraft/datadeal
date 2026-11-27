@@ -1,3 +1,5 @@
+// Kept for history: API requests were once paid with Creem-held credits.
+// Live routes now pay in points through ./point-usage.
 import { creemCreditsClient } from "@datadeal/database";
 import { database } from "./reports";
 

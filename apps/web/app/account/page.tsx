@@ -118,7 +118,7 @@ export default async function AccountPage({
         <AccountCard>
           <AccountRow
             title="Your data"
-            description="Profile, Pro billing records, unlocked reports, points and API credit activity, as one file."
+            description="Profile, Pro billing records, unlocked reports, points, point packs and API activity (including earlier API credits), as one file."
           >
             <a
               href="/api/v1/account/export"

@@ -33,7 +33,10 @@ export async function GET(request: Request) {
       watchlist: await database.listWatchlist(session.user.id),
       privacyProfile: (await database.privacyProfile(session.user.id)) ?? null,
       reportPoints: await database.exportReportRewards(session.user.id),
+      pointPackPurchases: await database.pointPackPurchases(session.user.id),
+      pointApiOperations: await database.pointApiOperations(session.user.id),
       apiTokens: await database.listApiTokens(session.user.id),
+      // Earlier API credits, kept for history after the merge into points.
       apiCredits: await database.apiCreditSummary(session.user.id, {
         fullHistory: true,
       }),

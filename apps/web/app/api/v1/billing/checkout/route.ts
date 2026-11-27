@@ -1,19 +1,25 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { auth } from "../../../../../lib/auth";
+import { billingConfig, checkoutBinding } from "../../../../../lib/billing";
 import {
-  billingConfig,
-  checkoutBinding,
-  creditPackBinding,
-  purchasableCreditPack,
-} from "../../../../../lib/billing";
+  pointPackBinding,
+  purchasablePointPacks,
+} from "../../../../../lib/point-packs";
 import { database } from "../../../../../lib/reports";
 import {
   creditCheckoutReturnPrefix,
   proCheckoutReturnPath,
 } from "../../../../../lib/checkout-return";
 
-const plan = z.object({ plan: z.enum(["monthly", "yearly", "api-credits"]) });
+// API credits were merged into points: a point pack is the only one-time purchase.
+const plan = z.discriminatedUnion("plan", [
+  z.object({ plan: z.enum(["monthly", "yearly"]) }),
+  z.object({
+    plan: z.literal("points"),
+    pack: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
+  }),
+]);
 const checkout = z.object({
   checkout_url: z.url(),
   id: z
@@ -53,21 +59,26 @@ export async function POST(request: Request) {
   const parsed = plan.safeParse(await request.json().catch(() => null));
   if (!parsed.success)
     return Response.json({ error: "Select a plan" }, { status: 400 });
-  const selection = parsed.data.plan;
-  if (selection === "api-credits" && !session.user.emailVerified)
+  const selection = parsed.data;
+  if (selection.plan === "points" && !session.user.emailVerified)
     return Response.json(
-      { error: "Verify your email before buying API credits." },
+      { error: "Verify your email before buying points." },
       { status: 403 },
     );
+  const packs = selection.plan === "points" ? purchasablePointPacks() : null;
   const pack =
-    selection === "api-credits" ? await purchasableCreditPack() : null;
-  const pro = selection === "api-credits" ? null : billingConfig();
-  const config = pack ?? pro;
+    selection.plan === "points"
+      ? (packs?.packs.find((item) => item.product === selection.pack) ?? null)
+      : null;
+  if (selection.plan === "points" && packs && !pack)
+    return Response.json({ error: "Select a point pack" }, { status: 400 });
+  const pro = selection.plan === "points" ? null : billingConfig();
+  const config = pack ? packs : pro;
   const product =
     pack?.product ??
-    (selection === "api-credits" ? undefined : pro?.[selection]);
+    (selection.plan === "points" ? undefined : pro?.[selection.plan]);
   const subscription =
-    selection === "api-credits"
+    selection.plan === "points"
       ? null
       : await database.billingSummary(session.user.id);
   if (subscription?.has_access || subscription?.needs_management)
@@ -97,16 +108,16 @@ export async function POST(request: Request) {
         datadeal_user: session.user.id,
         ...(!pack && { datadeal_pro_request: requestId }),
         ...(pack && {
-          datadeal_pack_credits: String(pack.credits),
+          datadeal_pack_points: String(pack.points),
           datadeal_price_cents: String(pack.price),
         }),
         datadeal_binding: pack
-          ? creditPackBinding(
+          ? pointPackBinding(
               config.secret,
               session.user.id,
               product,
               requestId,
-              pack.credits,
+              pack.points,
               pack.price,
             )
           : checkoutBinding(config.secret, session.user.id, product),
@@ -124,6 +135,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Checkout unavailable" }, { status: 502 });
   if (pack) {
     try {
+      // Remembered so a refund that arrives before its checkout is retried.
       await database.recordSandboxCreditProduct(product);
     } catch {
       return Response.json({ error: "Checkout unavailable" }, { status: 503 });

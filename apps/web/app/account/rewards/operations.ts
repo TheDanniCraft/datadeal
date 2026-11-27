@@ -6,4 +6,10 @@ export const pointOperations: Record<string, string> = {
   scan_refresh_refund: "Refresh refund",
   queue_boost: "Skipped the scan line",
   site_monitor: "Kept a site updated",
+  point_pack: "Point pack purchase",
+  point_pack_refund: "Point pack refund",
+  api_report_read: "API saved report",
+  api_scan: "API scan request",
+  api_scan_refund: "API scan refund",
+  credit_conversion: "API credits converted",
 };

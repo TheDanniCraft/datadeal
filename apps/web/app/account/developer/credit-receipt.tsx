@@ -6,6 +6,7 @@ import {
   isCreditRequestId,
 } from "../../../lib/checkout-return";
 import { database } from "../../../lib/reports";
+import { localPointsEnabled } from "../../../lib/local-reward";
 import { AccountForm } from "../account-form";
 import Link from "next/link";
 import { buttonVariants } from "@heroui/styles";
@@ -18,18 +19,25 @@ export async function CreditReceipt({ reference }: { reference: string }) {
     const target = checkoutAccountPath("credits", reference);
     redirect("/account?returnTo=" + encodeURIComponent(target));
   }
-  const receipt = database
-    ? await database.creditReceiptDetails(
+  const lookup = isCreditRequestId(reference)
+    ? { requestId: reference }
+    : { orderId: reference };
+  // Point packs first; earlier credit packs are kept for history.
+  const points = database
+    ? await database.pointPackReceipt(
         session.user.id,
-        isCreditRequestId(reference)
-          ? { requestId: reference }
-          : { orderId: reference },
+        isCreditRequestId(reference) ? reference : { orderId: reference },
       )
     : null;
+  const receipt = points
+    ? { status: points.status, credits: null }
+    : database
+      ? await database.creditReceiptDetails(session.user.id, lookup)
+      : null;
   return (
     <AccountScreen
       current="/account/developer"
-      title="Your credit purchase"
+      title="Your purchase"
       description={`Signed in as ${session.user.email}.`}
     >
       {receipt ? (
@@ -39,6 +47,7 @@ export async function CreditReceipt({ reference }: { reference: string }) {
           reference={reference}
           receipt={receipt.status}
           credits={receipt.credits}
+          points={points?.points ?? null}
         />
       ) : (
         <p role="status" className="m-0 text-sm">
@@ -49,14 +58,16 @@ export async function CreditReceipt({ reference }: { reference: string }) {
       <AccountCard>
         {receipt && receipt.status !== "pending" ? (
           <AccountRow
-            title="API credits"
-            description="See your balance and credit activity."
+            title="Points"
+            description="See your balance and point activity."
           >
             <Link
               className={buttonVariants({ variant: "primary", size: "sm" })}
-              href="/account/developer"
+              href={
+                localPointsEnabled() ? "/account/rewards" : "/account/developer"
+              }
             >
-              View API credits
+              View points
             </Link>
           </AccountRow>
         ) : (

@@ -8,7 +8,7 @@ import {
 import { publishedReportPayload } from "../../../../../../lib/published-report";
 import { database } from "../../../../../../lib/reports";
 
-import { nativeApiUsage } from "../../../../../../lib/native-usage";
+import { pointApiUsage } from "../../../../../../lib/point-usage";
 
 const headers = { "Cache-Control": "private, no-store" };
 
@@ -50,7 +50,7 @@ async function readReport(
 
   const conflict = () =>
     Response.json({ code: "idempotency_conflict" }, { status: 409, headers });
-  let charge: { key: string; requestHash: string; amount: number } | undefined;
+  let charge: { key: string; requestHash: string; points: number } | undefined;
   if (request.method === "POST") {
     const key = request.headers.get("Idempotency-Key");
     if (!key || !/^[A-Za-z0-9._:-]{1,160}$/.test(key))
@@ -66,7 +66,7 @@ async function readReport(
         { code: "paid_read_unavailable" },
         { status: 503, headers },
       );
-    charge = { key, requestHash, amount: developerReportReadCost };
+    charge = { key, requestHash, points: developerReportReadCost };
   }
 
   const load = async () => {
@@ -79,23 +79,18 @@ async function readReport(
     const payload = await load();
     return payload ? Response.json(payload, { headers }) : missing();
   }
-  const result = await nativeApiUsage(
+  const result = await pointApiUsage(
     verified.userId,
     charge,
     parsed.data,
-    "datadeal_report_read",
+    "report_read",
     load,
   );
   if (result.code === "report_unavailable") return missing();
   if (result.code === "conflict") return conflict();
-  if (result.code === "expired")
-    return Response.json(
-      { code: "read_expired_use_new_key" },
-      { status: 410, headers },
-    );
   if (result.code === "insufficient")
     return Response.json(
-      { code: "insufficient_credits", required: charge.amount },
+      { code: "insufficient_points", required: charge.points },
       { status: 402, headers },
     );
   if (result.code === "applied" || result.code === "replayed")
@@ -106,7 +101,7 @@ async function readReport(
           : headers,
     });
   return Response.json(
-    { code: "credit_debit_unavailable" },
+    { code: "point_debit_unavailable" },
     { status: 503, headers },
   );
 }

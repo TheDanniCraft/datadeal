@@ -32,7 +32,10 @@ import { apiTokenStorage } from "./api-tokens";
 import { creemCreditStorage } from "./creem-credit-storage";
 import { proCheckoutStorage } from "./pro-checkouts";
 export { creemCreditsClient, CreemCreditError } from "./creem-credit-client";
+// Creem-held credits are kept for history and export only; API usage is paid in points.
 import { nativeUsageStorage } from "./native-usage";
+import { pointStorage, refundApiPointScan } from "./points";
+export { pointPackReference } from "./points";
 import {
   apiCreditStorage,
   applyApiCreditCharge,
@@ -245,6 +248,33 @@ export function connect(url: string, { reusePool = false } = {}) {
       }),
   );
   const proCheckouts = proCheckoutStorage(sql);
+  // API scans run without a web client and share one daily bucket per account.
+  const enqueueApiScan = async (
+    tx: TransactionSql,
+    host: string,
+    userId: string,
+  ) => {
+    const daily =
+      "daily:account:" + createHash("sha256").update(userId).digest("hex");
+    try {
+      const result = await tx.savepoint((sp) =>
+        enqueueScan(sp, host, "manual", undefined, {
+          client: null,
+          daily,
+          reuseExisting: false,
+        }),
+      );
+      if (result.code === "watchlist_disabled")
+        throw new Error("Unexpected watchlist decision");
+      return result;
+    } catch (error) {
+      if (error instanceof ScanRequestLimitReached)
+        return {
+          code: error.window === "day" ? "daily_limit" : "hourly_limit",
+        } as const;
+      throw error;
+    }
+  };
 
   return {
     async requestPointRefresh(...args: Parameters<typeof refreshWithPoints>) {
@@ -261,28 +291,8 @@ export function connect(url: string, { reusePool = false } = {}) {
     ...apiTokenStorage(sql),
     ...creemCreditStorage(sql),
     ...proCheckouts,
-    ...nativeUsageStorage(sql, async (tx, host, userId) => {
-      const daily =
-        "daily:account:" + createHash("sha256").update(userId).digest("hex");
-      try {
-        const result = await tx.savepoint((sp) =>
-          enqueueScan(sp, host, "manual", undefined, {
-            client: null,
-            daily,
-            reuseExisting: false,
-          }),
-        );
-        if (result.code === "watchlist_disabled")
-          throw new Error("Unexpected watchlist decision");
-        return result;
-      } catch (error) {
-        if (error instanceof ScanRequestLimitReached)
-          return {
-            code: error.window === "day" ? "daily_limit" : "hourly_limit",
-          } as const;
-        throw error;
-      }
-    }),
+    ...nativeUsageStorage(sql, enqueueApiScan),
+    ...pointStorage(sql, enqueueApiScan),
     ...apiCreditStorage(sql),
     async apiScanStatus(userId: string, id: string) {
       const [scan] = await sql<
@@ -291,21 +301,31 @@ export function connect(url: string, { reusePool = false } = {}) {
           domain: string;
           state: string;
           requestedAt: Date;
+          pointsCharged: number;
+          pointsRefunded: number;
           creditsCharged: number;
           creditsRefunded: number;
           reportPublished: boolean;
         }[]
       >`
         select s.id, s.domain, s.state, s.requested_at as "requestedAt",
-          -entry.delta as "creditsCharged", coalesce(refund.delta, 0) as "creditsRefunded",
+          op.points as "pointsCharged",
+          case when op.refunded_at is null then 0 else op.points end as "pointsRefunded",
+          0 as "creditsCharged", 0 as "creditsRefunded",
           (s.report is not null and s.report->>'demo' = 'false') as "reportPublished"
+        from point_api_operations op join scans s on s.id = op.scan_id
+        where op.user_id = ${userId} and op.scan_id = ${id}
+        union all
+        select s.id, s.domain, s.state, s.requested_at, 0, 0,
+          -entry.delta, coalesce(refund.delta, 0),
+          (s.report is not null and s.report->>'demo' = 'false')
         from api_credit_entries entry
         join scans s on s.id = entry.scan_id
         left join api_credit_entries refund
           on refund.scan_id = s.id and refund.kind = 'scan_refund' and refund.user_id = entry.user_id
         where entry.user_id = ${userId} and entry.scan_id = ${id} and entry.kind = 'usage'
         union all
-        select s.id,s.domain,s.state,s.requested_at,op.amount,
+        select s.id,s.domain,s.state,s.requested_at,0,0,op.amount,
           case when op.refunded_at is null then 0 else op.amount end,
           (s.report is not null and s.report->>'demo' = 'false')
         from creem_api_operations op join scans s on s.id=op.scan_id
@@ -880,6 +900,7 @@ export function connect(url: string, { reusePool = false } = {}) {
           await tx`update scans set state = 'failed' where id = ${row.id}`;
           await tx`delete from scan_jobs where scan_id = ${row.id}`;
           await refundFailedApiScan(tx, row.id);
+          await refundApiPointScan(tx, row.id);
           await refundPointRefresh(tx, row.id);
           return null;
         }
@@ -1303,6 +1324,7 @@ export function connect(url: string, { reusePool = false } = {}) {
           where id = ${id}`;
         if (!report || !hasBillableScanEvidence(report)) {
           await refundFailedApiScan(tx, id);
+          await refundApiPointScan(tx, id);
           await refundPointRefresh(tx, id);
         }
         if (report && !report.demo) {

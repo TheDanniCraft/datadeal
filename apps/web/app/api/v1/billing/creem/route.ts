@@ -12,8 +12,11 @@ import {
   creemSubscription,
   matchesSignature,
   signature,
-  purchasedCreditPack,
 } from "../../../../../lib/billing";
+import {
+  pointPackConfig,
+  purchasedPointPack,
+} from "../../../../../lib/point-packs";
 import { database } from "../../../../../lib/reports";
 import { cancelSubscription } from "../../../../../lib/cancel-subscription";
 
@@ -90,26 +93,30 @@ export async function POST(request: Request) {
     }
     if (!payment.success || payment.data.id !== transactionId)
       return new Response(null, { status: 503 });
-    const client = creemCreditsClient();
-    if (!client) return new Response(null, { status: 503 });
-    const reversal = await database
-      .reverseCreemCreditPurchase(client, payment.data.order)
-      .catch(() => "unavailable");
-    // Pre-migration payments can only have an entry in the historical ledger.
-    const result =
-      reversal === "missing"
-        ? await database.recordApiCreditPaymentRefund(
-            "creem:test:" + payment.data.order,
-          )
-        : reversal;
+    const order = payment.data.order;
+    let result: string = await database
+      .refundPointPackPurchase(order)
+      .catch(() => "unavailable" as const);
+    if (result === "missing") {
+      // Orders from before points were bought as Creem-held credits. Those
+      // records are kept for history; reversing them never touches points.
+      const client = creemCreditsClient();
+      const reversal = client
+        ? await database
+            .reverseCreemCreditPurchase(client, order)
+            .catch(() => "unavailable" as const)
+        : ("missing" as const);
+      result =
+        reversal === "missing"
+          ? await database
+              .recordApiCreditPaymentRefund("creem:test:" + order)
+              .catch(() => "unavailable" as const)
+          : reversal;
+    }
     const product =
       typeof event.data.order === "object" && event.data.order?.product;
-    if (
-      result === "missing" &&
-      product &&
-      process.env.CREEM_CREDIT_PACK_PRODUCT &&
-      product !== process.env.CREEM_CREDIT_PACK_PRODUCT
-    ) {
+    const offered = pointPackConfig()?.packs.map((pack) => pack.product) ?? [];
+    if (result === "missing" && product && !offered.includes(product)) {
       // A refund can arrive before checkout.completed, including after the
       // purchased product has been replaced in the store configuration.
       try {
@@ -156,15 +163,14 @@ export async function POST(request: Request) {
     }
     const pack =
       connection.mode === "test" &&
-      purchasedCreditPack(object, connection.secret);
+      purchasedPointPack(object, connection.secret);
     if (!pack) return new Response(null);
     const completed = creemCreditCheckout.safeParse(object);
     if (!completed.success)
-      return new Response("Incomplete credit pack payment details", {
+      return new Response("Incomplete point pack payment details", {
         status: 422,
       });
     const { order, product, metadata, customer } = completed.data;
-    const user = metadata.datadeal_user;
     if (
       product.id !== pack.product ||
       order.product !== pack.product ||
@@ -176,21 +182,19 @@ export async function POST(request: Request) {
         (order.amount_paid === 0 ||
           order.amount_paid < (order.amount_due ?? pack.price)))
     )
-      return new Response("Credit pack order does not match the checkout", {
+      return new Response("Point pack order does not match the checkout", {
         status: 422,
       });
-    const client = creemCreditsClient();
-    if (!client) return new Response(null, { status: 503 });
     const result = await database
-      .settleCreemCreditPurchase(client, {
-        userId: user,
-        customerId: customer.id,
+      .settlePointPackPurchase({
+        userId: metadata.datadeal_user,
         email: customer.email,
         orderId: order.id,
         requestId: completed.data.request_id,
-        credits: pack.credits,
+        points: pack.points,
+        priceCents: pack.price,
       })
-      .catch(() => "unavailable");
+      .catch(() => "unavailable" as const);
     return new Response(null, {
       status:
         result === "conflict" ? 409 : result === "unavailable" ? 503 : 200,

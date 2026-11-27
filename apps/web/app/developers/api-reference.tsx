@@ -7,7 +7,7 @@ import {
 function cost(amount: number | null) {
   return amount === null
     ? "Unavailable"
-    : amount + (amount === 1 ? " credit" : " credits");
+    : amount.toLocaleString("en") + (amount === 1 ? " point" : " points");
 }
 export function ApiRates() {
   return (

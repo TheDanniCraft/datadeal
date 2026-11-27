@@ -105,8 +105,8 @@ export async function AccountOverview({
           <Tile
             href="/account/rewards"
             icon="points"
-            label="Report points"
-            value={String(wallet.balance)}
+            label="Points"
+            value={wallet.balance.toLocaleString("en")}
             note={
               lastPoints
                 ? `${lastPoints.delta > 0 ? "+" : ""}${lastPoints.delta} · ${pointOperations[lastPoints.operation] ?? "Points"}`

@@ -31,6 +31,10 @@ export function billingConfig() {
     : null;
 }
 
+/**
+ * The earlier API credit pack. Kept so older signed checkouts verify and as
+ * the fallback for CREEM_POINT_PACKS; new purchases are point packs.
+ */
 export function creditPackConfig() {
   const connection = creemConnection();
   const {
@@ -56,6 +60,7 @@ export function creditPackConfig() {
     price: Number(price),
   };
 }
+/** Kept for history: credit packs are no longer offered (see point-packs). */
 export async function purchasableCreditPack() {
   const origin = process.env.APP_ORIGIN;
   if (
@@ -119,6 +124,10 @@ const packMetadata = z.object({
   datadeal_user: z.string().min(1).max(100),
   datadeal_binding: z.string(),
   datadeal_pack_credits: z
+    .string()
+    .regex(/^[1-9]\d{0,8}$/)
+    .optional(),
+  datadeal_pack_points: z
     .string()
     .regex(/^[1-9]\d{0,8}$/)
     .optional(),

@@ -7,7 +7,9 @@ const {
   billingSummary,
   creditCheckoutReceipt,
   proCheckoutReceipt,
+  pointPackReceipt,
 } = vi.hoisted(() => ({
+  pointPackReceipt: vi.fn(),
   getSession: vi.fn(),
   checkoutReceipt: vi.fn(),
   billingSummary: vi.fn(),
@@ -21,6 +23,7 @@ vi.mock("../../../../../lib/reports", () => ({
     billingSummary,
     creditCheckoutReceipt,
     proCheckoutReceipt,
+    pointPackReceipt,
   },
 }));
 const status = (query: string) =>
@@ -109,4 +112,25 @@ it("reads the exact credit purchase for the signed-in buyer when the provider om
   expect(await receipt.json()).toEqual({ status: "confirmed" });
   expect(receipt.headers.get("cache-control")).toBe("private, no-store");
   expect(creditCheckoutReceipt).toHaveBeenCalledExactlyOnceWith("buyer", id);
+});
+
+it("reports a point pack by its request or order before an earlier credit pack", async () => {
+  const id = "0a05c6a0-deca-4b2a-8d88-9fba1f76c756";
+  getSession.mockResolvedValue({ user: { id: "buyer" } });
+  pointPackReceipt.mockResolvedValue({ status: "refunded", points: 25000 });
+  creditCheckoutReceipt.mockClear();
+  checkoutReceipt.mockClear();
+  expect(await (await status("request_id=" + id)).json()).toEqual({
+    status: "refunded",
+  });
+  expect(pointPackReceipt).toHaveBeenLastCalledWith("buyer", id);
+  expect(await (await status("order_id=ord_points")).json()).toEqual({
+    status: "refunded",
+  });
+  expect(pointPackReceipt).toHaveBeenLastCalledWith("buyer", {
+    orderId: "ord_points",
+  });
+  expect(creditCheckoutReceipt).not.toHaveBeenCalled();
+  expect(checkoutReceipt).not.toHaveBeenCalled();
+  pointPackReceipt.mockResolvedValue(null);
 });

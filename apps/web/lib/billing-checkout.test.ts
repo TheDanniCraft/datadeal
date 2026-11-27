@@ -1,10 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { POST } from "../app/api/v1/billing/checkout/route";
-import { checkoutBinding, creditPackBinding } from "./billing";
-import { creditServiceAccessible } from "./credit-service-access";
-vi.mock("./credit-service-access", () => ({
-  creditServiceAccessible: vi.fn(),
-}));
+import { checkoutBinding } from "./billing";
+import { pointPackBinding } from "./point-packs";
+import { localPointsEnabled } from "./local-reward";
+vi.mock("./local-reward", () => ({ localPointsEnabled: vi.fn() }));
 
 const { getSession, billingSummary, recordSandboxCreditProduct } = vi.hoisted(
   () => ({
@@ -21,11 +20,6 @@ vi.mock("./reports", () => ({
     recordProCheckout: vi.fn(),
   },
 }));
-vi.mock("./developer-token", () => ({
-  developerApiPreview: true,
-  developerReportReadCost: 1,
-  developerScanCost: null,
-}));
 
 const origin = "http://localhost:3000";
 const user = {
@@ -37,7 +31,7 @@ const secret = "sandbox-signing-secret";
 const checkoutUrl = "https://checkout.creem.io/ch_sandbox";
 
 function configure() {
-  vi.mocked(creditServiceAccessible).mockResolvedValue(true);
+  vi.mocked(localPointsEnabled).mockReturnValue(true);
   for (const [key, value] of Object.entries({
     APP_ORIGIN: origin,
     CREEM_MODE: "test",
@@ -45,9 +39,7 @@ function configure() {
     CREEM_WEBHOOK_SECRET: secret,
     CREEM_MONTHLY_PRODUCT: "prod_month",
     CREEM_YEARLY_PRODUCT: "prod_year",
-    CREEM_CREDIT_PACK_PRODUCT: "prod_pack",
-    CREEM_CREDIT_PACK_CREDITS: "10",
-    CREEM_CREDIT_PACK_PRICE_CENTS: "499",
+    CREEM_POINT_PACKS: "10000:500:prod_small,25000:1100:prod_pack",
   })) {
     vi.stubEnv(key, value);
   }
@@ -64,11 +56,15 @@ function configure() {
   return provider;
 }
 
-function request(plan: string, from = origin) {
+function request(plan: string, from = origin, pack = "prod_pack") {
   return new Request(origin + "/api/v1/billing/checkout", {
     method: "POST",
     headers: { Origin: from },
-    body: JSON.stringify({ plan, product_id: "client-controlled" }),
+    body: JSON.stringify({
+      plan,
+      product_id: "client-controlled",
+      ...(plan === "points" && { pack }),
+    }),
   });
 }
 
@@ -78,22 +74,36 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-it("withholds the pack checkout when the store cannot access Customer Credits", async () => {
+it("withholds point packs while local points are off and rejects unknown packs", async () => {
   const provider = configure();
-  vi.mocked(creditServiceAccessible).mockResolvedValue(false);
-  expect((await POST(request("api-credits"))).status).toBe(503);
+  vi.mocked(localPointsEnabled).mockReturnValue(false);
+  expect((await POST(request("points"))).status).toBe(503);
+  vi.mocked(localPointsEnabled).mockReturnValue(true);
+  expect((await POST(request("points", origin, "prod_other"))).status).toBe(
+    400,
+  );
+  // The earlier single credit pack plan no longer exists.
+  expect((await POST(request("api-credits"))).status).toBe(400);
   expect(provider).not.toHaveBeenCalled();
 });
 
-it("requires a verified account email before opening a credit pack checkout", async () => {
+it("never sells a point pack that shares a Pro product", async () => {
+  const provider = configure();
+  vi.stubEnv("CREEM_POINT_PACKS", "10000:500:prod_month");
+  expect((await POST(request("points", origin, "prod_month"))).status).toBe(
+    503,
+  );
+  expect(provider).not.toHaveBeenCalled();
+});
+
+it("requires a verified account email before opening a point pack checkout", async () => {
   const provider = configure();
   getSession.mockResolvedValueOnce({ user: { ...user, emailVerified: false } });
-  const response = await POST(request("api-credits"));
+  const response = await POST(request("points"));
   expect(response.status).toBe(403);
   expect(await response.json()).toEqual({
-    error: "Verify your email before buying API credits.",
+    error: "Verify your email before buying points.",
   });
-  expect(creditServiceAccessible).not.toHaveBeenCalled();
   expect(provider).not.toHaveBeenCalled();
   expect(recordSandboxCreditProduct).not.toHaveBeenCalled();
 });
@@ -101,7 +111,7 @@ it("requires a verified account email before opening a credit pack checkout", as
 it.each([
   ["monthly", "prod_month", "/account/billing/return/"],
   ["yearly", "prod_year", "/account/billing/return/"],
-  ["api-credits", "prod_pack", "/account/developer/return/"],
+  ["points", "prod_pack", "/account/developer/return/"],
 ])(
   "creates an account-bound sandbox checkout for %s",
   async (plan, product, returnPath) => {
@@ -110,7 +120,7 @@ it.each([
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(await response.json()).toEqual({ url: checkoutUrl });
-    if (plan === "api-credits")
+    if (plan === "points")
       expect(recordSandboxCreditProduct).toHaveBeenCalledExactlyOnceWith(
         product,
       );
@@ -131,18 +141,23 @@ it.each([
       metadata: {
         datadeal_user: user.id,
         datadeal_binding:
-          plan === "api-credits"
-            ? creditPackBinding(
+          plan === "points"
+            ? pointPackBinding(
                 secret,
                 user.id,
                 product,
                 payload.request_id,
-                10,
-                499,
+                25000,
+                1100,
               )
             : checkoutBinding(secret, user.id, product),
       },
     });
+    if (plan === "points")
+      expect(payload.metadata).toMatchObject({
+        datadeal_pack_points: "25000",
+        datadeal_price_cents: "1100",
+      });
   },
 );
 
@@ -158,11 +173,11 @@ it("does not create checkout for untrusted origins, guests, or an existing Pro s
   expect(provider).not.toHaveBeenCalled();
 });
 
-it("keeps the sandbox credit checkout closed on a hosted origin", async () => {
+it("keeps the sandbox point checkout closed on a hosted origin", async () => {
   const provider = configure();
   const deployed = "https://datadeal.example";
   vi.stubEnv("APP_ORIGIN", deployed);
-  expect((await POST(request("api-credits", deployed))).status).toBe(503);
+  expect((await POST(request("points", deployed))).status).toBe(503);
   expect(provider).not.toHaveBeenCalled();
 });
 
@@ -181,7 +196,7 @@ it("withholds the hosted pack URL if its product cannot be recorded for refunds"
   recordSandboxCreditProduct.mockRejectedValueOnce(
     Error("database unavailable"),
   );
-  const response = await POST(request("api-credits"));
+  const response = await POST(request("points"));
   expect(response.status).toBe(503);
   expect(await response.json()).toEqual({ error: "Checkout unavailable" });
 });

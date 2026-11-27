@@ -27,10 +27,10 @@ export async function GET(request: Request) {
   }
   const requestId = params.get("request_id");
   if (isCreditRequestId(requestId)) {
-    const status = await database.creditCheckoutReceipt(
-      session.user.id,
-      requestId,
-    );
+    const points = await database.pointPackReceipt(session.user.id, requestId);
+    const status =
+      points?.status ??
+      (await database.creditCheckoutReceipt(session.user.id, requestId));
     return Response.json({ status }, { headers });
   }
   if (params.get("checkout") === "pro") {
@@ -48,6 +48,12 @@ export async function GET(request: Request) {
   const kind = params.has("subscription_id") ? "subscription" : "credits";
   const id = checkoutReference(kind, Object.fromEntries(params));
   if (!id) return new Response(null, { status: 400, headers });
-  const status = await database.checkoutReceipt(session.user.id, kind, id);
+  const points =
+    kind === "credits"
+      ? await database.pointPackReceipt(session.user.id, { orderId: id })
+      : null;
+  const status =
+    points?.status ??
+    (await database.checkoutReceipt(session.user.id, kind, id));
   return Response.json({ status }, { headers });
 }

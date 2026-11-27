@@ -9,7 +9,7 @@ import {
   scanResponseHeaders as headers,
 } from "../../../../../../lib/developer-scan";
 
-import { nativeApiUsage } from "../../../../../../lib/native-usage";
+import { pointApiUsage } from "../../../../../../lib/point-usage";
 
 const acceptedScan = z.object({ id: z.uuid() });
 
@@ -39,11 +39,11 @@ export async function POST(
     .update("scan:request\0" + parsed.data)
     .digest("hex");
   if (developerScanCost === null) return reject("scan_unavailable", 503);
-  const result = await nativeApiUsage(
+  const result = await pointApiUsage(
     userId,
-    { key, requestHash, amount: developerScanCost },
+    { key, requestHash, points: developerScanCost },
     parsed.data,
-    "datadeal_scan_requested",
+    "scan",
   );
   switch (result.code) {
     case "applied":
@@ -53,7 +53,7 @@ export async function POST(
       return reject("idempotency_conflict", 409);
     case "insufficient":
       return Response.json(
-        { code: "insufficient_credits", required: developerScanCost },
+        { code: "insufficient_points", required: developerScanCost },
         { status: 402, headers },
       );
     case "daily_limit":

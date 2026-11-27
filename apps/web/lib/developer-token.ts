@@ -1,22 +1,24 @@
 import { createHash, randomBytes } from "node:crypto";
+import {
+  defaultRefreshPointCost,
+  defaultReportPointCost,
+} from "@datadeal/contracts/paper-plane";
+import { localPointsEnabled } from "./local-reward";
 
 export const developerApiPreview =
   process.env.NODE_ENV === "development" &&
   process.env.DATADEAL_DEVELOPER_API_PREVIEW === "true";
 
-function creditCost(configured = "") {
-  return /^[1-9]\d{0,9}$/.test(configured) &&
-    Number(configured) <= 2_147_483_647
-    ? Number(configured)
-    : null;
-}
-
-export const developerReportReadCost = creditCost(
-  process.env.DATADEAL_API_REPORT_READ_CREDITS,
-);
-export const developerScanCost = creditCost(
-  process.env.DATADEAL_API_SCAN_CREDITS,
-);
+/**
+ * API requests are paid in points: a saved report read costs the same as a
+ * report unlock, a new scan the same as a rescan. Points are local-only.
+ */
+export const developerReportReadCost = localPointsEnabled()
+  ? defaultReportPointCost
+  : null;
+export const developerScanCost = localPointsEnabled()
+  ? defaultRefreshPointCost
+  : null;
 
 export function hashDeveloperToken(secret: string) {
   return createHash("sha256").update(secret).digest("hex");

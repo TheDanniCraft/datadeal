@@ -11,8 +11,11 @@ import {
 import { ApiRates, ApiExample } from "../../developers/api-reference";
 import { headers } from "next/headers";
 import { auth } from "../../../lib/auth";
-import { purchasableCreditPack } from "../../../lib/billing";
-import { customerCreditSummary } from "../../../lib/customer-credit-summary";
+import {
+  describePointPacks,
+  purchasablePointPacks,
+} from "../../../lib/point-packs";
+import { localPointsEnabled } from "../../../lib/local-reward";
 import {
   developerApiPreview,
   developerReportReadCost,
@@ -21,7 +24,7 @@ import {
 import { database } from "../../../lib/reports";
 import { ApiTokens } from "./api-tokens";
 import { AccountDetails } from "./account-details";
-import { CreditPackCheckout } from "../billing/checkout-buttons";
+import { BuyPoints } from "../rewards/buy-points";
 import { CreditReceipt } from "./credit-receipt";
 import {
   checkoutReference,
@@ -31,10 +34,10 @@ import { LocalDate } from "../../../lib/local-date";
 
 export const dynamic = "force-dynamic";
 
-function creditCost(amount: number | null) {
+function pointCost(amount: number | null) {
   return amount === null
     ? "Unavailable"
-    : amount + (amount === 1 ? " credit" : " credits");
+    : amount.toLocaleString("en") + (amount === 1 ? " point" : " points");
 }
 
 function Amount({ value }: { value: string }) {
@@ -50,14 +53,7 @@ function Amount({ value }: { value: string }) {
   );
 }
 
-const activityLabels = {
-  pack: "Credit pack purchase",
-  pack_refund: "Credit pack refund",
-  scan: "Scan request",
-  read: "Report read",
-  scan_refund: "Scan credits returned",
-  read_refund: "Report credits returned",
-};
+const activityLabels = { report_read: "Saved report", scan: "Scan request" };
 
 export default async function DeveloperAccountPage({
   searchParams,
@@ -67,26 +63,23 @@ export default async function DeveloperAccountPage({
   const reference = checkoutReference("credits", await searchParams);
   if (reference) return <CreditReceipt reference={reference} />;
   const session = await auth?.api.getSession({ headers: await headers() });
+  const points = localPointsEnabled();
+  // API credits were merged into points. The earlier local credit ledger is
+  // listed for history; the Creem-held wallet is only in the account export.
   const account =
     session && database
       ? await Promise.all([
           database.listApiTokens(session.user.id),
           database.apiCreditSummary(session.user.id),
-          customerCreditSummary(database, session.user.id),
-          session.user.emailVerified ? purchasableCreditPack() : null,
+          points ? database.reportPointWallet(session.user.id) : null,
+          points ? database.pointApiOperations(session.user.id, 25) : [],
         ])
       : null;
-  const [tokens, legacy, wallet, pack] = account ?? [];
-  const activity =
-    session && database && wallet?.entries.length
-      ? await database.creemCreditActivity(
-          session.user.id,
-          wallet.entries.map((entry) => entry.transactionId),
-        )
-      : [];
-  const activityByTransaction = new Map(
-    activity.map((item) => [item.transactionId, item]),
-  );
+  const [tokens, legacy, wallet, operations] = account ?? [];
+  const packs =
+    session?.user.emailVerified && wallet
+      ? purchasablePointPacks()?.packs
+      : null;
   if (!session)
     return (
       <div className="mx-auto max-w-5xl space-y-12 py-8 md:py-16">
@@ -119,9 +112,9 @@ export default async function DeveloperAccountPage({
           </h2>
           <ApiRates />
           <p>
-            Prepaid credits cover saved reports and new scans. You can check a
-            scan’s status for free. API credits are separate from a Pro
-            subscription.
+            Points cover saved reports and new scans: the same points that open
+            reports on the site. Buy a pack or earn them by flying the paper
+            plane. You can check a scan’s status for free.
           </p>
         </section>
       </div>
@@ -129,47 +122,44 @@ export default async function DeveloperAccountPage({
   return (
     <AccountScreen
       title="Developer API"
-      description="Create scoped tokens and track the credits you use for reports and scans."
+      description="Create scoped tokens and track the points you use for reports and scans."
       current="/account/developer"
     >
-      {tokens && legacy && wallet && (
+      {tokens && legacy && (
         <AccountSection
-          title="Credits"
-          description="Prepaid credits cover saved reports and new scans. API credits are separate from a Pro subscription."
+          title="Points"
+          description="Points pay for saved reports and new scans. They are the same points that open reports on the site."
         >
           <AccountCard>
             <div className="flex flex-wrap items-center justify-between gap-4 p-4">
               <div className="grid min-w-0 gap-1">
                 <span className="text-xs text-muted">Balance</span>
-                {wallet.state === "unavailable" ? (
-                  <span className="text-sm">
-                    Your credit balance is temporarily unavailable.
+                {wallet ? (
+                  <span className="text-3xl leading-none font-semibold tabular-nums">
+                    {wallet.balance.toLocaleString("en")}
+                    <span className="ml-1.5 text-sm font-normal text-muted">
+                      {wallet.balance === 1 ? "point" : "points"}
+                    </span>
                   </span>
                 ) : (
-                  <span className="text-3xl leading-none font-semibold tabular-nums">
-                    {wallet.balance}
-                    <span className="ml-1.5 text-sm font-normal text-muted">
-                      credits
-                    </span>
+                  <span className="text-sm">
+                    Points are currently unavailable.
                   </span>
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                {!session.user.emailVerified ? (
+                {!wallet ? null : !session.user.emailVerified ? (
                   <span className="text-sm text-muted">
-                    Verify your email before buying API credits.
+                    Verify your email before buying points.
                   </span>
-                ) : pack && wallet.state !== "unavailable" ? (
-                  <CreditPackCheckout
-                    credits={pack.credits}
-                    price={new Intl.NumberFormat("en-IE", {
-                      style: "currency",
-                      currency: "EUR",
-                    }).format(pack.price / 100)}
+                ) : packs ? (
+                  <BuyPoints
+                    packs={describePointPacks(packs)}
+                    returnTo="/account/developer"
                   />
                 ) : (
                   <span className="text-sm text-muted">
-                    Credit packs are currently unavailable.
+                    Point packs are currently unavailable.
                   </span>
                 )}
               </div>
@@ -197,104 +187,95 @@ export default async function DeveloperAccountPage({
             <AccountStat label="Current report" value="Free" />
             <AccountStat
               label="Saved report"
-              value={creditCost(developerReportReadCost)}
+              value={pointCost(developerReportReadCost)}
             />
             <AccountStat
               label="New scan"
-              value={creditCost(developerScanCost)}
+              value={pointCost(developerScanCost)}
             />
           </div>
         </AccountCard>
       </AccountSection>
-      {tokens && legacy && wallet ? (
+      {tokens && legacy && operations ? (
         <>
           <ApiTokens
             records={tokens}
             scansEnabled={developerApiPreview && developerScanCost !== null}
           />
           <AccountSection
-            title="Credit activity"
-            description="Purchases, refunds and the credits your requests used."
+            title="Point activity"
+            description="The points your API requests used, and what failed scans returned."
           >
             <AccountCard>
-              {wallet.entries.map((entry) => {
-                const item = activityByTransaction.get(entry.transactionId);
-                return (
-                  <AccountRow
-                    key={entry.id}
-                    title={
-                      item
-                        ? activityLabels[item.kind]
-                        : entry.side === "credit"
-                          ? "Credits added"
-                          : "Credits deducted"
-                    }
-                    description={
-                      <>
-                        <span className="block">
-                          {item &&
-                            item.kind !== "pack" &&
-                            item.kind !== "pack_refund" &&
-                            item.context + " · "}
-                          <time dateTime={entry.createdAt}>
-                            {new Date(entry.createdAt)
-                              .toISOString()
-                              .slice(0, 16)
-                              .replace("T", " ")}{" "}
-                            UTC
-                          </time>
-                        </span>
-                        <AccountDetails label="Transaction details">
-                          {item &&
-                            (item.kind === "pack" ||
-                              item.kind === "pack_refund") && (
-                              <p className="m-0">
-                                Order <code>{item.context}</code>
-                              </p>
-                            )}
-                          <p className="m-0">
-                            Transaction <code>{entry.transactionId}</code>
-                          </p>
-                        </AccountDetails>
-                      </>
-                    }
-                  >
-                    <Amount
-                      value={
-                        (entry.side === "credit" ? "+" : "−") + entry.amount
-                      }
-                    />
-                  </AccountRow>
-                );
-              })}
-              {wallet.state !== "unavailable" &&
-                !wallet.entries.length &&
-                !legacy.entries.length && (
-                  <AccountRow
-                    title="No credit activity yet"
-                    description="Purchases and API usage will appear here."
-                  />
-                )}
-              {wallet.state === "unavailable" && !wallet.entries.length && (
+              {operations.map((entry) => (
                 <AccountRow
-                  title="Activity unavailable"
-                  description="Your credit activity is temporarily unavailable."
+                  key={entry.id}
+                  title={activityLabels[entry.kind]}
+                  description={
+                    <>
+                      <span className="block">
+                        {entry.domain} ·{" "}
+                        <time
+                          dateTime={new Date(entry.createdAt).toISOString()}
+                        >
+                          <LocalDate value={entry.createdAt} />
+                        </time>
+                        {entry.refundedAt && " · points returned"}
+                      </span>
+                      <AccountDetails label="Request details">
+                        <p className="m-0">
+                          Idempotency key <code>{entry.requestKey}</code>
+                        </p>
+                        {entry.scanId && (
+                          <p className="m-0">
+                            Scan <code>{entry.scanId}</code>
+                          </p>
+                        )}
+                      </AccountDetails>
+                    </>
+                  }
+                >
+                  <Amount
+                    value={
+                      entry.refundedAt
+                        ? "±0"
+                        : "−" + entry.points.toLocaleString("en")
+                    }
+                  />
+                </AccountRow>
+              ))}
+              {!operations.length && (
+                <AccountRow
+                  title="No API point activity yet"
+                  description={
+                    points ? (
+                      <>
+                        Saved reports and scans you request will appear here.
+                        Purchases and other point activity are on the{" "}
+                        <Link
+                          className="text-accent underline-offset-2 hover:underline"
+                          href="/account/rewards"
+                        >
+                          Points
+                        </Link>{" "}
+                        page.
+                      </>
+                    ) : (
+                      "Saved reports and scans you request will appear here."
+                    )
+                  }
                 />
               )}
-              {wallet.state !== "unavailable" &&
-                !wallet.entries.length &&
-                legacy.entries.length > 0 && (
-                  <AccountRow
-                    title="No recent credit activity"
-                    description="Your earlier activity is listed below."
-                  />
-                )}
             </AccountCard>
           </AccountSection>
           {legacy.entries.length > 0 && (
             <AccountSection
               title="Earlier credit activity"
-              description={<>Earlier balance: {legacy.balance}.</>}
+              description={
+                Number(legacy.balance) > 0
+                  ? `API credits were replaced by points. The remaining ${legacy.balance} credits were converted at 100 points per credit.`
+                  : "API credits were replaced by points."
+              }
             >
               <AccountCard>
                 {legacy.entries.map((entry) => (

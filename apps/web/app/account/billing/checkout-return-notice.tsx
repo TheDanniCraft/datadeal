@@ -18,11 +18,14 @@ export function CheckoutReturnNotice({
   reference,
   receipt,
   credits,
+  points,
 }: {
   kind: CheckoutKind;
   reference: string | null;
   receipt: CheckoutReceipt;
   credits?: number | null;
+  /** A point pack: the points it added (shown instead of credits). */
+  points?: number | null;
 }) {
   const router = useRouter();
   const [paused, setPaused] = useState(false);
@@ -91,12 +94,16 @@ export function CheckoutReturnNotice({
     receipt === "pending"
       ? "Waiting for checkout confirmation"
       : receipt === "refunded"
-        ? "Credit pack refunded"
+        ? points != null
+          ? "Point pack refunded"
+          : "Credit pack refunded"
         : receipt === "inactive"
           ? "This subscription is inactive"
           : subscription
             ? "Pro subscription confirmed"
-            : "Credit pack added";
+            : points != null
+              ? "Points added"
+              : "Credit pack added";
   return (
     <Alert
       className="w-full"
@@ -106,7 +113,16 @@ export function CheckoutReturnNotice({
       <Alert.Indicator />
       <Alert.Content>
         <Alert.Title>{title}</Alert.Title>
-        {credits != null &&
+        {points != null &&
+          (receipt === "confirmed" || receipt === "refunded") && (
+            <Alert.Description>
+              {receipt === "confirmed"
+                ? `${points.toLocaleString("en")} points added to your balance.`
+                : "The pack’s points were removed from your balance, as far as they were still available."}
+            </Alert.Description>
+          )}
+        {points == null &&
+          credits != null &&
           (receipt === "confirmed" || receipt === "refunded") && (
             <Alert.Description>
               {credits.toLocaleString("en")}{" "}
@@ -117,7 +133,7 @@ export function CheckoutReturnNotice({
           )}
         {receipt === "pending" && (
           <Alert.Description>
-            {subscription ? "Pro access" : "Your credit pack"} will appear once
+            {subscription ? "Pro access" : "Your purchase"} will appear once
             DataDeal receives confirmation from Creem. You can leave this page.
             Please keep your receipt and avoid a second purchase.
             {paused ? (

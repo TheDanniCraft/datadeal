@@ -3,6 +3,7 @@ import postgres from "postgres";
 import { describe, expect, it } from "vitest";
 import { connect } from "./index";
 import { applyReportPoints } from "./report-points";
+import { defaultRefreshPointCost as cost } from "@datadeal/contracts/paper-plane";
 
 const url = process.env.DATADEAL_TEST_DATABASE_URL;
 async function verify(
@@ -43,7 +44,7 @@ describe.skipIf(!url)("Optional report-point refresh", () => {
       await sql.begin((tx) =>
         applyReportPoints(tx, {
           userId: user,
-          delta: 50,
+          delta: cost,
           operation: "test_award",
           referenceId: randomUUID(),
         }),
@@ -74,7 +75,7 @@ describe.skipIf(!url)("Optional report-point refresh", () => {
       await sql`update scan_jobs set owner=${owner},lease_until=now()+interval '5 minutes' where scan_id=${first.id}`;
       expect(await db.finish(first.id, owner, null)).toBe(true);
       expect(await db.finish(first.id, owner, null)).toBe(false);
-      expect(await balance()).toBe(50);
+      expect(await balance()).toBe(cost);
       expect(await request()).toMatchObject({ code: "refunded", id: first.id });
       expect(
         await db.requestPointRefresh(user, host, randomUUID(), null, null),
@@ -124,7 +125,7 @@ describe.skipIf(!url)("Optional report-point refresh", () => {
         await sql`select 1 from report_point_ledger where user_id=${user} and delta<0`,
       ).toHaveLength(0);
     }));
-  it("funds only one simultaneous domain refresh with a 50-point balance", () =>
+  it("funds only one simultaneous domain refresh with a one-refresh balance", () =>
     verify(async ({ db, sql, user, host, balance }) => {
       const other = "other." + host;
       await sql`insert into domains(name) values(${other})`;
@@ -133,7 +134,7 @@ describe.skipIf(!url)("Optional report-point refresh", () => {
         await sql.begin((tx) =>
           applyReportPoints(tx, {
             userId: user,
-            delta: 50,
+            delta: cost,
             operation: "test_award",
             referenceId: randomUUID(),
           }),
@@ -161,7 +162,7 @@ describe.skipIf(!url)("Optional report-point refresh", () => {
       await sql.begin((tx) =>
         applyReportPoints(tx, {
           userId: user,
-          delta: 50,
+          delta: cost,
           operation: "test_award",
           referenceId: randomUUID(),
         }),
@@ -177,7 +178,7 @@ describe.skipIf(!url)("Optional report-point refresh", () => {
       await sql`update scan_jobs set attempts=3,lease_until=now()-interval '1 minute' where scan_id=${queued.id}`;
       await sql`update scans set requested_at=now()-interval '6 years' where id=${queued.id}`;
       expect(await db.claim()).toBeNull();
-      expect(await balance()).toBe(50);
+      expect(await balance()).toBe(cost);
       expect(
         await sql`select 1 from scan_jobs where scan_id=${queued.id}`,
       ).toHaveLength(0);
