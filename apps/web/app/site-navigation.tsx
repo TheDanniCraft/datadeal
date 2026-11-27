@@ -6,6 +6,7 @@ import { useState } from "react";
 import { DomainSearch } from "./search";
 
 const destinations = [
+  ["/reports", "Reports"],
   ["/methodology", "Methodology"],
   ["/pricing", "Pricing"],
   ["/account/developer", "Developers"],

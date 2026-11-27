@@ -594,17 +594,22 @@ export function connect(url: string, { reusePool = false } = {}) {
         order by s.requested_at desc, s.id desc
         limit 20`;
     },
-    async recentPublishedDomains() {
+    /**
+     * The latest published report of recently scanned sites, newest first.
+     * Reserved test domains (example.com, .test, …) never show up here.
+     */
+    async recentPublishedDomains({ days = 90, limit = 20 } = {}) {
       const rows = await sql<
         { domain: string; scanId: string; snapshot: unknown }[]
       >`
         select domain, id as "scanId", report as snapshot from (
           select distinct on (domain) domain, id, requested_at, report
-          from scans where requested_at >= now() - interval '7 days'
+          from scans where requested_at >= now() - make_interval(days => ${days})
             and report->'demo' = 'false'::jsonb
             and state in ('completed', 'partially_completed')
+            and domain !~ '(^|\\.)(example\\.(com|org|net)|test|invalid|localhost|example)$'
           order by domain, requested_at desc, id desc
-        ) latest order by requested_at desc, domain limit 20`;
+        ) latest order by requested_at desc, domain limit ${Math.min(200, limit)}`;
       return rated(rows);
     },
     /** The latest published rating of each domain, in the order given. */
