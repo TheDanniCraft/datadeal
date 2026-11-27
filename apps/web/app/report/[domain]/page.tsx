@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { proIncludedWatches } from "@datadeal/contracts/paper-plane";
 import { RewardFromQuery } from "../../rewards/reward-modal";
 import { cookies, headers } from "next/headers";
 
@@ -117,7 +118,7 @@ export default async function ReportPage({
     session && database ? await database.hasPro(session.user.id) : false;
   // Enough points open the report without an ad.
   const pointBalance =
-    session && database && !pro && localPointsEnabled()
+    session && database && localPointsEnabled()
       ? (await database.reportPointWallet(session.user.id)).balance
       : 0;
   const rewardCookies = report && localRewardEnabled() ? await cookies() : null;
@@ -160,6 +161,14 @@ export default async function ReportPage({
     session && database
       ? await database.isSaved(session.user.id, host)
       : undefined;
+  const proWatches =
+    pro && session && database
+      ? await database.watchingCount(session.user.id)
+      : 0;
+  const proBoostsLeft =
+    pro && session && database
+      ? await database.proBoostsLeft(session.user.id)
+      : 0;
   // Pro watches are saved sites with alerts on.
   const proWatching =
     pro && session && database && saved
@@ -478,8 +487,16 @@ export default async function ReportPage({
         keepUpdated={
           !session || !report || report.demo
             ? undefined
-            : pro
-              ? { mode: "pro", watching: proWatching, balance: 0 }
+            : pro &&
+                (proWatching ||
+                  proWatches < proIncludedWatches ||
+                  !localPointsEnabled())
+              ? {
+                  mode: "pro",
+                  watching: proWatching,
+                  balance: 0,
+                  included: { used: proWatches, limit: proIncludedWatches },
+                }
               : localPointsEnabled()
                 ? {
                     mode: "points",
@@ -489,8 +506,12 @@ export default async function ReportPage({
                 : undefined
         }
         boost={
-          session && !pro && localPointsEnabled() && current === "queued"
-            ? { scanId: history[0].id, balance: pointBalance }
+          session && localPointsEnabled() && current === "queued"
+            ? {
+                scanId: history[0].id,
+                balance: pointBalance,
+                freeLeft: proBoostsLeft,
+              }
             : undefined
         }
         browserScan={

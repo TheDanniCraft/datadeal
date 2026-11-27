@@ -214,7 +214,7 @@ it.skipIf(!url)(
       ).toEqual(["after", "before"]);
       expect(await db.documentAlerts("other")).toEqual([]);
       expect(await db.setDocumentAlerts("alert-user", domain, false)).toBe(
-        true,
+        "updated",
       );
       expect(await db.documentAlerts("alert-user")).toEqual([]);
       expect(await db.enqueue(domain, "watchlist")).toBeNull();

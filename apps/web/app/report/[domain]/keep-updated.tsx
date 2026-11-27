@@ -23,7 +23,9 @@ async function post(url: string, method: string, body: unknown) {
   } | null;
   return error?.code === "insufficient"
     ? "Your balance is too low."
-    : "Could not change this. Try again.";
+    : error?.code === "limit"
+      ? "Your included Pro watches are in use. Stop one first."
+      : "Could not change this. Try again.";
 }
 
 /**
@@ -37,6 +39,7 @@ export function WatchButton({
   mode,
   balance = 0,
   saved = true,
+  included,
 }: {
   host: string;
   watching: boolean;
@@ -44,6 +47,8 @@ export function WatchButton({
   balance?: number;
   /** Pro watches live on saved sites; unsaved ones are saved first. */
   saved?: boolean;
+  /** Pro's included watches: how many are in use. */
+  included?: { used: number; limit: number };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -135,7 +140,15 @@ export function WatchButton({
               </ul>
               <div className="grid gap-1 rounded-xl bg-default/60 p-3">
                 {mode === "pro" ? (
-                  <span className="font-medium">Included with Pro</span>
+                  <>
+                    <span className="font-medium">Included with Pro</span>
+                    {included && (
+                      <span className="text-xs text-muted">
+                        {included.used} of {included.limit} included watches in
+                        use. More sites can be watched with points.
+                      </span>
+                    )}
+                  </>
                 ) : (
                   <>
                     <span className="flex items-baseline justify-between gap-3">

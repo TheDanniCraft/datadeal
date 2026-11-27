@@ -1984,12 +1984,13 @@ export function ReportContent({
   /** 1 = next to start, while the scan waits. */
   queuePosition?: number;
   /** Report points to skip the scan queue, for signed-in visitors. */
-  boost?: { scanId: string; balance: number };
+  boost?: { scanId: string; balance: number; freeLeft?: number };
   /** Points-funded weekly rescans for signed-in visitors. */
   keepUpdated?: {
     watching: boolean;
     mode: "pro" | "points";
     balance: number;
+    included?: { used: number; limit: number };
   };
   /** Free saving to the library, for signed-in visitors. */
   saved?: boolean;

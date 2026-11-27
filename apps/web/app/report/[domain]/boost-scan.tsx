@@ -9,14 +9,17 @@ import { queueBoostCost } from "@datadeal/contracts/paper-plane";
 export function BoostScan({
   scanId,
   balance,
+  freeLeft = 0,
 }: {
   scanId: string;
   balance: number;
+  /** Pro's free boosts left this month. */
+  freeLeft?: number;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const affordable = balance >= queueBoostCost;
+  const affordable = freeLeft > 0 || balance >= queueBoostCost;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
       <Button
@@ -52,7 +55,9 @@ export function BoostScan({
         }}
       >
         {busy && <Spinner size="sm" color="current" aria-hidden="true" />}
-        Skip the line for {queueBoostCost} points
+        {freeLeft > 0
+          ? `Skip the line, free (${freeLeft} left this month)`
+          : `Skip the line for ${queueBoostCost} points`}
       </Button>
       {!affordable && (
         <span className="text-xs text-muted">You have {balance} points.</span>

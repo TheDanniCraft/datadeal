@@ -39,5 +39,13 @@ export async function PATCH(request: Request) {
     parsed.data.domain,
     parsed.data.enabled,
   );
-  return new Response(null, { status: updated ? 204 : 404, headers });
+  if (updated === "limit")
+    return Response.json(
+      { code: "limit", error: "Pro includes this many watched sites" },
+      { status: 409, headers },
+    );
+  return new Response(null, {
+    status: updated === "updated" ? 204 : 404,
+    headers,
+  });
 }

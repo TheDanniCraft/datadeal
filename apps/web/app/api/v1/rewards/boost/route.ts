@@ -17,7 +17,11 @@ export async function POST(request: Request) {
   const input = body.safeParse(await request.json().catch(() => null));
   if (!input.success)
     return Response.json({ code: "invalid_request" }, { status: 400 });
-  const code = await database.boostScan(session.user.id, input.data.scanId);
+  const code = await database.boostScan(
+    session.user.id,
+    input.data.scanId,
+    await database.hasPro(session.user.id),
+  );
   return Response.json(
     { code },
     {

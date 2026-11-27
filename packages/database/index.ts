@@ -46,6 +46,8 @@ import { applyReportPoints } from "./report-points";
 import {
   freeRescanSites,
   monitorDailyCost,
+  proIncludedWatches,
+  proMonthlyBoosts,
   queueBoostCost,
 } from "@datadeal/contracts/paper-plane";
 import { paperPlaneStorage } from "./paper-plane";
@@ -379,10 +381,37 @@ export function connect(url: string, { reusePool = false } = {}) {
       `;
     },
     documentAlerts: (userId: string) => watchlistAlerts(sql, userId),
+    /** Turns watching (alerts and weekly rescans) on or off for a saved site. */
     async setDocumentAlerts(userId: string, input: string, enabled: boolean) {
-      const [row] = await sql`update watchlists set document_alerts = ${enabled}
-        where user_id = ${userId} and domain = ${domain.parse(input)} returning domain`;
-      return Boolean(row);
+      const host = domain.parse(input);
+      return sql.begin(async (tx) => {
+        await tx`select id from "user" where id = ${userId} for update`;
+        if (enabled) {
+          // Pro includes a few watches; sites already watched stay watched.
+          const [count] = await tx<{ watching: number }[]>`
+            select count(*)::int as watching from watchlists
+            where user_id = ${userId} and document_alerts and domain <> ${host}`;
+          if ((count?.watching ?? 0) >= proIncludedWatches)
+            return "limit" as const;
+        }
+        const [row] =
+          await tx`update watchlists set document_alerts = ${enabled}
+          where user_id = ${userId} and domain = ${host} returning domain`;
+        return row ? ("updated" as const) : ("missing" as const);
+      });
+    },
+    async watchingCount(userId: string) {
+      const [row] = await sql<{ watching: number }[]>`
+        select count(*)::int as watching from watchlists
+        where user_id = ${userId} and document_alerts`;
+      return row?.watching ?? 0;
+    },
+    /** Free Pro boosts still available this calendar month. */
+    async proBoostsLeft(userId: string) {
+      const [row] = await sql<{ used: number }[]>`
+        select count(*)::int as used from pro_queue_boosts
+        where user_id = ${userId} and created_at >= date_trunc('month', now())`;
+      return Math.max(0, proMonthlyBoosts - (row?.used ?? 0));
     },
     async listWatchlist(userId: string) {
       return sql<
@@ -955,13 +984,24 @@ export function connect(url: string, { reusePool = false } = {}) {
       return row?.position ?? null;
     },
     /** Spend report points to move a waiting scan to the front of the queue. */
-    async boostScan(userId: string, scanId: string) {
+    async boostScan(userId: string, scanId: string, pro = false) {
       return sql.begin(async (tx) => {
+        await tx`select id from "user" where id = ${userId} for update`;
         const [job] = await tx<{ boosted: boolean; running: boolean }[]>`
           select boosted, (owner is not null and lease_until > now()) as running
           from scan_jobs where scan_id = ${scanId} for update`;
         if (!job || job.running) return "not_waiting" as const;
         if (job.boosted) return "already_boosted" as const;
+        if (pro) {
+          const [used] = await tx<{ count: number }[]>`
+            select count(*)::int as count from pro_queue_boosts
+            where user_id = ${userId} and created_at >= date_trunc('month', now())`;
+          if ((used?.count ?? 0) < proMonthlyBoosts) {
+            await tx`insert into pro_queue_boosts(scan_id, user_id) values(${scanId}, ${userId})`;
+            await tx`update scan_jobs set boosted = true where scan_id = ${scanId}`;
+            return "boosted" as const;
+          }
+        }
         const debit = await applyReportPoints(tx, {
           userId,
           delta: -queueBoostCost,

@@ -6,6 +6,10 @@ export const defaultReportPointCost = 150;
 export const defaultRefreshPointCost = 150;
 /** Moves a waiting scan to the front of the queue: 1.5x a normal action. */
 export const queueBoostCost = 225;
+/** Pro includes this many watched sites with email alerts. */
+export const proIncludedWatches = 2;
+/** Pro includes this many free "skip the line" boosts per calendar month. */
+export const proMonthlyBoosts = 5;
 /** Watching rescans weekly; those rescans cost this much less than a manual one. */
 export const watchDiscount = 0.1;
 /**

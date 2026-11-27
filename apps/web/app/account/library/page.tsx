@@ -1,7 +1,10 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { buttonVariants } from "@heroui/styles";
-import { monitorDailyCost } from "@datadeal/contracts/paper-plane";
+import {
+  monitorDailyCost,
+  proIncludedWatches,
+} from "@datadeal/contracts/paper-plane";
 import {
   AccountCard,
   AccountEmpty,
@@ -122,6 +125,7 @@ export default async function LibraryPage() {
   ]);
   const rating = (domain: string) =>
     ratings.find((item) => item.domain === domain);
+  const proWatches = saved.filter((item) => item.document_alerts).length;
 
   return (
     <AccountScreen
@@ -147,7 +151,11 @@ export default async function LibraryPage() {
         ) : (
           <AccountCard>
             {sites.map((site) => {
-              const watching = pro
+              // Pro covers a few watches; past those, sites are watched with points.
+              const usePro =
+                pro &&
+                (site.proWatch || proWatches < proIncludedWatches || !points);
+              const watching = usePro
                 ? site.proWatch
                 : monitors.includes(site.domain);
               return (
@@ -169,7 +177,7 @@ export default async function LibraryPage() {
                   }
                   description={
                     watching ? (
-                      pro ? (
+                      usePro ? (
                         "Watching · weekly rescans and email alerts"
                       ) : (
                         `Watching · ${monitorDailyCost} points a day`
@@ -188,9 +196,14 @@ export default async function LibraryPage() {
                     <WatchButton
                       host={site.domain}
                       watching={watching}
-                      mode={pro ? "pro" : "points"}
+                      mode={usePro ? "pro" : "points"}
                       balance={wallet?.balance ?? 0}
                       saved={site.saved}
+                      included={
+                        usePro
+                          ? { used: proWatches, limit: proIncludedWatches }
+                          : undefined
+                      }
                     />
                   )}
                   {site.saved && <RemoveSaved domain={site.domain} />}
