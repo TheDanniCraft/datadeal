@@ -12,6 +12,7 @@ COPY apps/web/package.json apps/web/package.json
 COPY apps/worker/package.json apps/worker/package.json
 COPY apps/extension/package.json apps/extension/package.json
 COPY packages/ai/package.json packages/ai/package.json
+COPY packages/collector/package.json packages/collector/package.json
 COPY packages/config/package.json packages/config/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/database/package.json packages/database/package.json

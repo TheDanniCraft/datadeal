@@ -11,6 +11,7 @@ COPY apps/extension/package.json apps/extension/
 COPY apps/web/package.json apps/web/
 COPY apps/worker/package.json apps/worker/
 COPY packages/ai/package.json packages/ai/
+COPY packages/collector/package.json packages/collector/
 COPY packages/config/package.json packages/config/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/database/package.json packages/database/
@@ -32,6 +33,7 @@ FROM manifests AS worker-deps
 RUN bun install --frozen-lockfile --production --filter @datadeal/worker
 COPY apps/worker apps/worker
 COPY packages/ai packages/ai
+COPY packages/collector packages/collector
 COPY packages/contracts packages/contracts
 COPY packages/database packages/database
 COPY packages/scanner packages/scanner

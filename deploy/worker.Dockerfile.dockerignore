@@ -10,6 +10,7 @@
 !apps/worker/browser-egress.mts
 !apps/worker/tsconfig.json
 !packages/ai/package.json
+!packages/collector/package.json
 !packages/config/package.json
 !packages/contracts/package.json
 !packages/database/package.json
@@ -17,6 +18,7 @@
 !packages/scoring/package.json
 !packages/ui/package.json
 !packages/ai/*.ts
+!packages/collector/*.ts
 !packages/contracts/*.ts
 !packages/database/*.ts
 !packages/database/migrate.mjs
