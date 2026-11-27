@@ -6,11 +6,15 @@ export const defaultReportPointCost = 150;
 export const defaultRefreshPointCost = 150;
 /** Moves a waiting scan to the front of the queue: 1.5x a normal action. */
 export const queueBoostCost = 225;
+/** Watching rescans weekly; those rescans cost this much less than a manual one. */
+export const watchDiscount = 0.1;
 /**
- * "Keep me updated": paid each day, about one unlock a month. The site is
- * rescanned weekly and every new report of it stays open.
+ * Watching a site, paid each day: one weekly rescan at the watch discount,
+ * spread over seven days (150 × 0.9 / 7 ≈ 19, so 133 a week instead of 150).
  */
-export const monitorDailyCost = 5;
+export const monitorDailyCost = Math.round(
+  (defaultRefreshPointCost * (1 - watchDiscount)) / 7,
+);
 /** The most requested sites rescan weekly for free. */
 export const freeRescanSites = 50;
 // Surviving flights pause here once so the player can bank or fly on

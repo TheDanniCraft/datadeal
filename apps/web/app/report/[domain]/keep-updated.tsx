@@ -3,7 +3,11 @@
 import { Button, Modal, Spinner } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { monitorDailyCost } from "@datadeal/contracts/paper-plane";
+import {
+  defaultRefreshPointCost,
+  monitorDailyCost,
+  watchDiscount,
+} from "@datadeal/contracts/paper-plane";
 
 const bell = "M4 17h16l-2-3v-4a6 6 0 0 0-12 0v4z M10 20a2 2 0 0 0 4 0";
 
@@ -72,7 +76,7 @@ export function WatchButton({
       router.refresh();
     }
   };
-  const monthly = monitorDailyCost * 30;
+  const weekly = monitorDailyCost * 7;
   return (
     <>
       <Button
@@ -139,8 +143,13 @@ export function WatchButton({
                         {monitorDailyCost} points a day
                       </span>
                       <span className="text-xs text-muted">
-                        about {monthly} a month
+                        {weekly} a week
                       </span>
+                    </span>
+                    <span className="text-xs text-muted">
+                      That pays for the weekly rescan at{" "}
+                      {Math.round(watchDiscount * 100)}% off a manual rescan (
+                      {defaultRefreshPointCost} points).
                     </span>
                     <span className="text-xs text-muted">
                       You have {balance} points. Watching stops on its own when
