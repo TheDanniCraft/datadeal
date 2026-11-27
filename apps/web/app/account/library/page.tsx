@@ -130,7 +130,7 @@ export default async function LibraryPage() {
   return (
     <AccountScreen
       title="Library"
-      description="Sites you saved and reports you unlocked. Watch a site to have it rescanned every week."
+      description="Sites you saved and reports you unlocked. Watch a site to have it rescanned regularly."
       current="/account/library"
     >
       <AccountSection
@@ -139,7 +139,7 @@ export default async function LibraryPage() {
           pro
             ? "Watching turns on weekly rescans and an email when the score or privacy documents change."
             : points
-              ? `Saving is free. Watching costs ${monitorDailyCost} points a day and rescans the site every week.`
+              ? `Saving is free. Watching rescans the site every day for ${monitorDailyCost} points a day.`
               : "Saving is free. Watching with weekly rescans and alerts is part of Pro."
         }
         action={<SaveForm />}
@@ -279,8 +279,8 @@ export default async function LibraryPage() {
             </AccountCard>
           ) : (
             <AccountEmpty symbol="alerts" title="No changes yet">
-              When a weekly scan finds a new score or changed documents, it
-              shows up here.
+              When a rescan finds a new score or changed documents, it shows up
+              here.
             </AccountEmpty>
           )}
         </AccountSection>

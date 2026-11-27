@@ -29,7 +29,7 @@ async function post(url: string, method: string, body: unknown) {
 }
 
 /**
- * Watching a site: weekly rescans, and every new report stays open. Pro
+ * Watching a site: regular rescans, and every new report stays open. Pro
  * includes it with email alerts; otherwise it costs points each day.
  * A bell opens the settings and the price.
  */
@@ -81,7 +81,6 @@ export function WatchButton({
       router.refresh();
     }
   };
-  const weekly = monitorDailyCost * 7;
   return (
     <>
       <Button
@@ -117,7 +116,9 @@ export function WatchButton({
             <Modal.Body className="grid gap-4 text-sm">
               <ul className="m-0! grid list-none gap-2 p-0!">
                 {[
-                  "DataDeal rescans the site every week.",
+                  mode === "pro"
+                    ? "DataDeal rescans the site every week."
+                    : "DataDeal rescans the site every day.",
                   "Each new report stays open for you.",
                   mode === "pro"
                     ? "You get an email when the score or privacy documents change."
@@ -155,12 +156,9 @@ export function WatchButton({
                       <span className="font-medium">
                         {monitorDailyCost} points a day
                       </span>
-                      <span className="text-xs text-muted">
-                        {weekly} a week
-                      </span>
                     </span>
                     <span className="text-xs text-muted">
-                      That pays for the weekly rescan at{" "}
+                      That pays for each day's rescan at{" "}
                       {Math.round(watchDiscount * 100)}% off a manual rescan (
                       {defaultRefreshPointCost} points).
                     </span>

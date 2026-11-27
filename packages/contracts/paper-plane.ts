@@ -10,14 +10,14 @@ export const queueBoostCost = 225;
 export const proIncludedWatches = 2;
 /** Pro includes this many free "skip the line" boosts per calendar month. */
 export const proMonthlyBoosts = 5;
-/** Watching rescans weekly; those rescans cost this much less than a manual one. */
+/** Watched sites rescan daily, at this discount on a manual rescan. */
 export const watchDiscount = 0.1;
 /**
- * Watching a site, paid each day: one weekly rescan at the watch discount,
- * spread over seven days (150 × 0.9 / 7 ≈ 19, so 133 a week instead of 150).
+ * Watching a site with points, paid each day: that day's rescan at the watch
+ * discount (150 × 0.9 = 135 instead of 150).
  */
 export const monitorDailyCost = Math.round(
-  (defaultRefreshPointCost * (1 - watchDiscount)) / 7,
+  defaultRefreshPointCost * (1 - watchDiscount),
 );
 /** The most requested sites rescan weekly for free. */
 export const freeRescanSites = 50;

@@ -177,7 +177,13 @@ export function connect(url: string, { reusePool = false } = {}) {
       source === "manual" &&
       process.env.NODE_ENV !== "production" &&
       process.env.DATADEAL_DEV_SKIP_SCAN_COOLDOWN === "true";
-    const cooldownHours = skipCooldown ? 0 : source === "manual" ? 1 : 168;
+    const cooldownHours = skipCooldown
+      ? 0
+      : source === "manual"
+        ? 1
+        : source === "monitor"
+          ? 20
+          : 168;
     const [existing] = await tx<
       { id: string; state: string; retryAfter: number }[]
     >`select id, state, greatest(1, ceil(extract(epoch from requested_at + interval '1 hour' - now())))::int as "retryAfter" from scans where domain = ${host}
@@ -754,10 +760,10 @@ export function connect(url: string, { reusePool = false } = {}) {
     async dueMonitoredDomains() {
       const rows = await sql<{ domain: string }[]>`
         with wanted as (
-          select domain, 0 as rank from site_monitors
+          select domain, 0 as rank, interval '20 hours' as every from site_monitors
           where paid_through >= current_date
           union all
-          select domain, 1 from (
+          select domain, 1, interval '7 days' from (
             select domain from scans
             where requested_at > now() - interval '30 days'
               and report->'demo' = 'false'::jsonb
@@ -767,7 +773,7 @@ export function connect(url: string, { reusePool = false } = {}) {
         )
         select w.domain from wanted w
         where not exists (select 1 from scans s where s.domain = w.domain
-          and (s.state in ('queued','fetching') or s.requested_at > now() - interval '7 days'))
+          and (s.state in ('queued','fetching') or s.requested_at > now() - w.every))
           and exists (select 1 from scans s where s.domain = w.domain
             and s.state in ('completed','partially_completed'))
         group by w.domain order by min(w.rank), w.domain

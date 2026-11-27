@@ -1985,7 +1985,7 @@ export function ReportContent({
   queuePosition?: number;
   /** Report points to skip the scan queue, for signed-in visitors. */
   boost?: { scanId: string; balance: number; freeLeft?: number };
-  /** Points-funded weekly rescans for signed-in visitors. */
+  /** Watching: daily rescans with points, or Pro's included weekly ones. */
   keepUpdated?: {
     watching: boolean;
     mode: "pro" | "points";
