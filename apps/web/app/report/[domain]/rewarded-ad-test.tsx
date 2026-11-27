@@ -1,10 +1,7 @@
 "use client";
-import { ConsentDialogLink } from "@c15t/nextjs";
-import {
-  useAdvertisingConsent,
-  useLimitedAdsPurposeOffered,
-} from "../../../lib/ads/use-advertising-consent";
-import { Button, Modal, Spinner, buttonVariants } from "@heroui/react";
+import { useTcfConsent } from "../../../lib/ads/use-tcf-consent";
+import { PrivacySettingsLink } from "../../../lib/ads/privacy-settings";
+import { Button, Modal, Spinner, buttonVariants, toast } from "@heroui/react";
 import { ReportIcon } from "./report-icon";
 import { useCallback, useState } from "react";
 import { RewardModal } from "../../rewards/reward-modal";
@@ -16,14 +13,12 @@ import {
 function TestOffer({
   host,
   scanId,
-  limited,
   game,
   signedIn,
   label = "Watch an ad to unlock",
 }: {
   host: string;
   scanId: string;
-  limited: boolean;
   game: boolean;
   signedIn: boolean;
   label?: string;
@@ -37,14 +32,12 @@ function TestOffer({
   const [saving, setSaving] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
   const [retryId, setRetryId] = useState<string>();
-  const [notice, setNotice] = useState("");
   const [rewardId, setRewardId] = useState<string | null>(null);
   const saveReward = useCallback(
     async (completionId: string) => {
       setRetryId(undefined);
       setSaving(true);
       setRequested(false);
-      setNotice("Saving your reward…");
       try {
         const response = await fetch("/api/v1/rewards/local-sample", {
           method: "POST",
@@ -56,30 +49,27 @@ function TestOffer({
         else {
           const reward = await response.json();
           setSaving(false);
-          setNotice("");
           setRewardId(reward.id);
         }
       } catch {
         setSaving(false);
         setRetryId(completionId);
-        setNotice("Your ad is complete. Try saving your reward again.");
+        toast.danger("Reward not saved. Try again.");
       }
     },
     [host, scanId],
   );
-  useRewardedAd(requested, limited, {
-    onOpen: () => setNotice("The ad is open."),
+  useRewardedAd(requested, {
+    onOpen: () => {},
     onGranted: () => void saveReward(intent || crypto.randomUUID()),
-    onStop: (message, noInventory) => {
+    onStop: (_message, noInventory) => {
       setUnavailable(noInventory);
-      setNotice(message);
       setRequested(false);
     },
   });
   const start = async (offer: "unlock" | "choice" | "flight") => {
     setChooserOpen(false);
     setChoice(offer);
-    setNotice("");
     if (game) {
       setSaving(true);
       try {
@@ -91,7 +81,7 @@ function TestOffer({
         if (!response.ok) throw Error();
         setIntent((await response.json()).id);
       } catch {
-        setNotice("This reward could not be reserved. Try again.");
+        toast.danger("Reward not reserved. Try again.");
         return;
       } finally {
         setSaving(false);
@@ -228,11 +218,6 @@ function TestOffer({
           </Modal.Dialog>
         </Modal.Container>
       </Modal.Backdrop>
-      {notice && (
-        <p role="status" className="m-0 text-sm leading-relaxed sm:col-span-2">
-          {notice}
-        </p>
-      )}
     </>
   );
 }
@@ -240,24 +225,27 @@ export function RewardedAdTest({
   host,
   scanId,
   game = false,
+  ads = false,
   signedIn = false,
   pointBalance = 0,
 }: {
   host: string;
   scanId: string;
+  /** Points are on: spend them, or fly the paper plane after an ad. */
   game?: boolean;
+  /** The sample rewarded ad is available (local development only). */
+  ads?: boolean;
   signedIn?: boolean;
   pointBalance?: number;
 }) {
-  const consent = useAdvertisingConsent();
-  const limitedOffered = useLimitedAdsPurposeOffered();
+  const consent = useTcfConsent();
   const [spendMessage, setSpendMessage] = useState("");
   const [spending, setSpending] = useState(false);
-  const adsEligible = consent !== "privacy-signal" || limitedOffered;
+  const adsEligible = ads;
   const points = game && signedIn;
   const canSpend = points && pointBalance >= defaultReportPointCost;
   if (!adsEligible && !points) return null;
-  const adsReady = consent === "allowed" || consent === "limited";
+  const adsReady = consent === "allowed";
 
   const spend = async () => {
     setSpending(true);
@@ -291,10 +279,12 @@ export function RewardedAdTest({
   };
 
   const description = canSpend
-    ? `You have ${pointBalance} report points. Unlock this scan for ${defaultReportPointCost} and keep it in your account, no ad needed.`
-    : consent === "privacy-signal"
-      ? "You can choose limited advertising in Privacy settings when it is available."
-      : "Watch a short ad for 24-hour access, including rescans.";
+    ? `You have ${pointBalance.toLocaleString("en")} points. Unlock this scan for ${defaultReportPointCost} and keep it in your account${ads ? ", no ad needed" : ""}.`
+    : !ads
+      ? `Unlock this scan for ${defaultReportPointCost} points and keep it in your account.`
+      : consent === "denied"
+        ? "Allow ads in Privacy settings to watch a short ad for 24-hour access."
+        : "Watch a short ad for 24-hour access, including rescans.";
 
   return (
     <div className="grid min-w-0 gap-y-2 border-t border-separator px-5 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-6 sm:gap-y-0 sm:px-8">
@@ -305,10 +295,11 @@ export function RewardedAdTest({
         </p>
         {points && !canSpend && (
           <p className="mt-1 mb-0 text-xs text-muted">
-            You have {pointBalance} of the {defaultReportPointCost} report
-            points that unlock a scan without an ad.{" "}
+            You have {pointBalance.toLocaleString("en")} of the{" "}
+            {defaultReportPointCost} points that unlock a scan
+            {ads ? " without an ad" : ""}.{" "}
             <a className="inline-link" href="/account/rewards">
-              My points
+              {ads ? "My points" : "Get points"}
             </a>
           </p>
         )}
@@ -330,27 +321,24 @@ export function RewardedAdTest({
         {adsEligible &&
           (adsReady ? (
             <TestOffer
-              key={consent}
               game={game}
               signedIn={signedIn}
-              limited={consent === "limited"}
               host={host}
               scanId={scanId}
               label={canSpend ? "Watch an ad instead" : undefined}
             />
           ) : (
-            !canSpend && (
-              <ConsentDialogLink
+            !canSpend &&
+            consent === "denied" && (
+              <PrivacySettingsLink
                 className={buttonVariants({
                   variant: "secondary",
                   size: "sm",
                   className: "min-h-11 w-full sm:w-auto",
                 })}
               >
-                {consent === "privacy-signal"
-                  ? "Review limited ad settings"
-                  : "Review advertising consent"}
-              </ConsentDialogLink>
+                Review advertising consent
+              </PrivacySettingsLink>
             )
           ))}
       </div>

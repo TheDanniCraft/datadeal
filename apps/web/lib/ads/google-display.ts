@@ -1,12 +1,8 @@
-import {
-  publisherScript,
-  configurePublisherPrivacy,
-  type PublisherPrivacy,
-} from "./publisher-tag";
+import { publisherScript } from "./publisher-tag";
 
 type Slot = { addService(service: unknown): Slot };
 type SlotRenderListener = (event: { slot: Slot; isEmpty: boolean }) => void;
-type PublisherAds = PublisherPrivacy & {
+type PublisherAds = {
   addEventListener(type: "slotRenderEnded", listener: SlotRenderListener): void;
   removeEventListener(
     type: "slotRenderEnded",
@@ -33,8 +29,6 @@ export function mountGoogleDisplayAd(
   element: HTMLElement,
   path: string,
   onUnavailable: (reason: DisplayAdFailure) => void,
-  testAd = false,
-  limited = false,
   format: "banner" | "rail" = "banner",
 ) {
   const scope = window as Window & { googletag?: Gpt };
@@ -43,11 +37,7 @@ export function mountGoogleDisplayAd(
   let slot: Slot | null = null;
   let publisher: PublisherAds | undefined;
   let active = true;
-  const script = publisherScript(limited);
-  if (!script) {
-    onUnavailable("unavailable");
-    return;
-  }
+  const script = publisherScript();
   const fail = (reason: DisplayAdFailure) => {
     if (!active) return;
     active = false;
@@ -70,10 +60,6 @@ export function mountGoogleDisplayAd(
       return;
     }
     publisher = tag.pubads();
-    if (!configurePublisherPrivacy(publisher, limited)) {
-      unavailable();
-      return;
-    }
     slot = tag.defineSlot(
       path,
       format === "rail"
@@ -107,7 +93,7 @@ export function mountGoogleDisplayAd(
   return () => {
     active = false;
     clearTimeout(deadline);
-    script?.removeEventListener("error", loadFailed);
+    script.removeEventListener("error", loadFailed);
     publisher?.removeEventListener("slotRenderEnded", onRender);
     if (slot) tag.destroySlots([slot]);
   };

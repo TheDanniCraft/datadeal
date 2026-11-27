@@ -2,6 +2,7 @@ import Link from "next/link";
 import { buttonVariants } from "@heroui/styles";
 import { AccountDetails } from "./developer/account-details";
 import { AccountIcon, type AccountSymbol } from "./account-icon";
+import { pointsEnabled } from "../../lib/points-flag";
 
 const sections = [
   ["Overview", "/account", "account"],
@@ -10,10 +11,9 @@ const sections = [
   ["Library", "/account/library", "watchlist"],
 ] as const satisfies readonly (readonly [string, string, AccountSymbol])[];
 export function AccountNavigation({ current }: { current: string }) {
-  const available =
-    current === "/account/rewards"
-      ? [...sections, ["Points", "/account/rewards", "points"] as const]
-      : sections;
+  const available = pointsEnabled()
+    ? [...sections, ["Points", "/account/rewards", "points"] as const]
+    : sections;
   const links = (
     <nav
       className="grid grid-cols-2 gap-1 md:grid-cols-1"

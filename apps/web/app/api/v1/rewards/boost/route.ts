@@ -1,16 +1,13 @@
 import { z } from "zod";
 import { auth } from "../../../../../lib/auth";
 import { database } from "../../../../../lib/reports";
-import {
-  localPointsRequest,
-  privateHeaders,
-} from "../../../../../lib/point-offer";
+import { pointsRequest, privateHeaders } from "../../../../../lib/point-offer";
 
 const body = z.strictObject({ scanId: z.uuid() });
 
-/** Spend report points to move a waiting scan to the front of the queue. */
+/** Spend points (or a Pro free boost) to move a waiting scan to the front of the queue. */
 export async function POST(request: Request) {
-  const guard = localPointsRequest(request);
+  const guard = pointsRequest(request);
   if (guard || !database) return new Response(null, { status: guard || 503 });
   const session = await auth?.api.getSession({ headers: request.headers });
   if (!session) return Response.json({ code: "unauthorized" }, { status: 401 });

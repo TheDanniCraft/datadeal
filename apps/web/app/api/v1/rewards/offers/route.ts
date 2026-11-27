@@ -6,6 +6,7 @@ import { database } from "../../../../../lib/reports";
 import {
   handlePointAction,
   localPointsRequest,
+  pointsRequest,
   pointActor,
   privateHeaders,
   rememberBrowser,
@@ -45,11 +46,17 @@ const body = z.discriminatedUnion("action", [
   }),
 ]);
 export async function POST(request: Request) {
-  const guard = localPointsRequest(request);
+  // Spending points works wherever points are on; every ad-driven offer
+  // (reserve, flights, completion) still needs the local sample ad unit.
+  const guard = pointsRequest(request);
   if (guard || !database) return new Response(null, { status: guard || 503 });
   const input = body.safeParse(await request.json().catch(() => null));
   if (!input.success) return new Response(null, { status: 400 });
   const params = input.data;
+  if (params.action !== "spend") {
+    const local = localPointsRequest(request);
+    if (local) return new Response(null, { status: local });
+  }
   if (params.action === "reserve") {
     const { actor, raw } = await pointActor();
     const id = await database.createReportOffer(

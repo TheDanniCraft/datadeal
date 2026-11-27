@@ -9,6 +9,7 @@ import {
   offerBrowserCookie,
   offerBrowserHash,
   localPointsEnabled,
+  pointsEnabled,
 } from "./local-reward";
 import { database } from "./reports";
 
@@ -30,6 +31,20 @@ export function localPointsRequest(request: Request) {
     (caller.host !== url.host && caller.host !== request.headers.get("host"))
   )
     return 403;
+  return 0;
+}
+/**
+ * Guard for point spending (boosts, unlocks, watches) that must also work in
+ * production: points on, and the call comes from the configured app origin.
+ * Locally with sample ads it falls back to the loopback check above.
+ */
+export function pointsRequest(request: Request) {
+  if (!pointsEnabled()) return 404;
+  if (localPointsEnabled()) return localPointsRequest(request);
+  const configured = process.env.APP_ORIGIN;
+  const origin = request.headers.get("origin");
+  if (!configured || !URL.canParse(configured)) return 404;
+  if (!origin || origin !== new URL(configured).origin) return 403;
   return 0;
 }
 export async function pointActor() {

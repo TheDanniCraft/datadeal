@@ -61,9 +61,8 @@ test("creates, rotates, and revokes an account API token without resurfacing sec
   ).toBeVisible();
   await page.goto((await readFile(outbox!, "utf8")).trim());
   await expect(page).toHaveURL(/\/account\/developer$/);
-  const credits = page.getByRole("region", { name: "API credits" });
-  await expect(credits).toContainText("Balance: 0");
-  await expect(credits).toContainText("No credit activity yet.");
+  await expect(page.getByRole("heading", { name: "Points" })).toBeVisible();
+  await expect(page.getByText("No API point activity yet")).toBeVisible();
   await page.getByLabel("Token name").fill("Report reader");
   await page.getByRole("button", { name: "Create token" }).click();
   const reveal = page.getByRole("textbox", { name: "New API token" });
@@ -90,7 +89,8 @@ test("creates, rotates, and revokes an account API token without resurfacing sec
       !body.includes(replacement) &&
       !body.includes('"hash"'),
   ).toBe(true);
-  if (process.env.DATADEAL_API_SCAN_CREDITS) {
+  // Scan tokens need points on (DATADEAL_POINTS or local sample ads).
+  if (process.env.DATADEAL_POINTS === "true") {
     await page.getByLabel("Token name").fill("Scan requester");
     await page.getByRole("button", { name: "Create scan token" }).click();
     await expect(reveal).toBeVisible();
@@ -225,12 +225,12 @@ test("preserves a pending credit pack across sign-in and stops checking automati
     .getByRole("button", { name: /reject all|reject optional/i })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Check your credit purchase" }),
+    page.getByRole("heading", { name: "Check your point purchase" }),
   ).toBeVisible();
   expect(new URL(page.url()).searchParams.get("returnTo")).toBe(target);
   await page
     .getByLabel("Email address")
-    .fill("credits-" + randomUUID() + "@example.test");
+    .fill("points-" + randomUUID() + "@example.test");
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   await expect(
     page.getByText("Your sign-in link is in the local outbox."),
@@ -247,15 +247,15 @@ test("preserves a pending credit pack across sign-in and stops checking automati
   await expect(
     page.getByText("Waiting for checkout confirmation"),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /buy .*credits/i }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /buy .*points/i })).toHaveCount(
+    0,
+  );
   const retry = page.getByRole("button", { name: "Check again" });
   await expect(retry).toBeVisible({ timeout: 50_000 });
   expect(requests).toBe(5);
   await retry.click();
   await expect.poll(() => requests).toBe(6);
-  await expect(page.getByText("Credit pack added")).toHaveCount(0);
+  await expect(page.getByText("Points added")).toHaveCount(0);
 });
 
 test("restores the exact credit pack across browsers and a delayed payment", async ({
@@ -288,7 +288,10 @@ test("restores the exact credit pack across browsers and a delayed payment", asy
   await page.route("https://test-checkout.creem.io/**", (route) =>
     route.fulfill({ contentType: "text/plain", body: "Isolated test store" }),
   );
-  await page.getByRole("button", { name: /buy 25 test credits/i }).click();
+  await page.getByRole("button", { name: "Buy points", exact: true }).click();
+  await page
+    .getByRole("button", { name: /^Buy [\d,]+ points for /, exact: false })
+    .click();
   await page.waitForURL("https://test-checkout.creem.io/**");
   const target = new URL(new URL(page.url()).searchParams.get("return")!);
   expect(target.origin).toBe(baseURL);
@@ -304,7 +307,7 @@ test("restores the exact credit pack across browsers and a delayed payment", asy
     const tab = await context.newPage();
     await tab.goto(target.href);
     await expect(
-      tab.getByRole("heading", { name: "Check your credit purchase" }),
+      tab.getByRole("heading", { name: "Check your point purchase" }),
     ).toBeVisible();
     expect(new URL(tab.url()).searchParams.get("returnTo")).toBe(
       target.pathname,
@@ -315,7 +318,7 @@ test("restores the exact credit pack across browsers and a delayed payment", asy
       tab.getByText("Waiting for checkout confirmation"),
     ).toBeVisible();
     await expect(
-      tab.getByRole("button", { name: /buy .*credits/i }),
+      tab.getByRole("button", { name: /buy .*points/i }),
     ).toHaveCount(0);
     const id = randomUUID();
     const event = JSON.stringify({
@@ -365,14 +368,14 @@ test("restores the exact credit pack across browsers and a delayed payment", asy
     expect((await deliver("invalid")).status()).toBe(401);
     await expect(await deliver(signature(billingSecret!, event))).toBeOK();
     await expect(await deliver(signature(billingSecret!, event))).toBeOK();
-    await expect(tab.getByText("Credit pack added")).toBeVisible({
+    await expect(tab.getByText("Points added")).toBeVisible({
       timeout: 20_000,
     });
     await expect(
-      tab.getByText("25 API credits added to your wallet."),
+      tab.getByText("2,500 points added to your balance."),
     ).toBeVisible();
     await expect(
-      tab.getByRole("button", { name: /buy .*credits/i }),
+      tab.getByRole("button", { name: /buy .*points/i }),
     ).toHaveCount(0);
     await testInfo.attach("credit-receipt-mobile", {
       body: await tab.screenshot(),
@@ -382,10 +385,9 @@ test("restores the exact credit pack across browsers and a delayed payment", asy
       "/api/v1/billing/return-status?request_id=" + randomUUID(),
     );
     expect(await other.json()).toEqual({ status: "pending" });
-    await tab.getByRole("link", { name: "View API credits" }).click();
-    await expect(
-      tab.getByRole("region", { name: "API credits" }),
-    ).toContainText("Balance: 25");
+    await tab.getByRole("link", { name: "View points" }).click();
+    await expect(tab.getByText("Available balance")).toBeVisible();
+    await expect(tab.getByText("2,500", { exact: true })).toBeVisible();
   } finally {
     await context.close();
   }
@@ -697,12 +699,10 @@ test("signs in once using a magic link and revokes the session on sign-out", asy
   ).toBeVisible();
 });
 
-test("opens a scheduled document alert and mutes future alerts", async ({
-  page,
-}) => {
+test("opens a scheduled document change from the Library", async ({ page }) => {
   test.skip(!watchDomain, "Requires a scheduled alert in the test database");
   test.setTimeout(60_000);
-  await page.goto("/account/alerts");
+  await page.goto("/account/library");
   await page
     .getByRole("button", { name: /reject all|reject optional/i })
     .click();
@@ -713,7 +713,7 @@ test("opens a scheduled document alert and mutes future alerts", async ({
     page.getByText("Your sign-in link is in the local outbox."),
   ).toBeVisible();
   await page.goto((await readFile(outbox!, "utf8")).trim());
-  await page.goto("/account/alerts");
+  await page.goto("/account/library");
   await expect(page.getByText(/1 changed document/)).toBeVisible();
   await page.goto("/account");
   const privacyProfile = page.getByRole("region", { name: "Privacy profile" });
@@ -737,8 +737,12 @@ test("opens a scheduled document alert and mutes future alerts", async ({
   expect(await account.json()).toMatchObject({
     privacyProfile: "data_minimization",
   });
-  await page.goto("/account/alerts");
-  await page.getByRole("link", { name: watchDomain, exact: true }).click();
+  await page.goto("/account/library");
+  await page
+    .getByRole("link", { name: "View" })
+    .and(page.locator(`[href^="/report/${watchDomain}?scan="]`))
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/report\/[^?]+\?scan=[a-f0-9-]+#history$/);
   await expect(
     page.getByText(/for your privacy profile, skip optional fields/i),
@@ -757,10 +761,11 @@ test("opens a scheduled document alert and mutes future alerts", async ({
         return route.abort();
       },
     );
-    await page.getByRole("button", { name: "Privacy settings" }).click();
-    const preferences = page.getByRole("dialog");
-    await preferences.getByRole("button", { name: /accept all/i }).click();
-    await expect(preferences).toBeHidden();
+    // Pro is ad-free: no ad placement and no Google consent controls.
+    await page.reload();
+    await expect(
+      page.locator("footer").getByRole("button", { name: "Privacy settings" }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("complementary", { name: "Advertisement" }),
     ).toHaveCount(0);
@@ -786,14 +791,9 @@ test("opens a scheduled document alert and mutes future alerts", async ({
   } finally {
     await guest.close();
   }
-  await page.goto("/account/alerts");
-  const toggle = page.getByRole("button", {
-    name: `Watchlist alerts for ${watchDomain}`,
-  });
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByText("No changes to report.")).toBeVisible();
+  await page.goto("/account/library");
+  await expect(page.getByRole("heading", { name: "Changes" })).toBeVisible();
+  await expect(page.getByText(watchDomain).first()).toBeVisible();
 });
 
 test("exports only the current account and deletes it after explicit email confirmation", async ({

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ConsentDialogLink } from "@c15t/nextjs";
+import { PrivacySettingsLink } from "../../lib/ads/privacy-settings";
 import { buttonVariants } from "@heroui/styles/components/button";
 import { z } from "zod";
 import { umamiConfig } from "../../lib/umami";
@@ -8,7 +8,7 @@ const sections = [
   ["reports", "Reports and ads"],
   ["scans", "Website scans"],
   ["account", "Your account"],
-  ["payments", "Payments and API credits"],
+  ["payments", "Payments and points"],
   ["extension", "Browser extension"],
 ] as const;
 
@@ -54,42 +54,40 @@ export function PrivacyPage() {
           <section aria-labelledby="reports">
             <h2 id="reports">Reports and ads</h2>
             <p>
-              On your first visit, our consent tool creates a browser identifier
-              called <code>c15t-sid</code>. It stays in a first-party cookie and
-              local storage across visits, including when you decline ads. A
-              separate entry called <code>c15t</code> remembers your choice.
+              If you don’t have Pro, free reports can show Google AdSense ads.
+              Loading them connects your browser to Google, which receives
+              technical information such as your IP address and may use cookies.
+              Signed-in Pro members read reports without Google ad scripts.
+            </p>
+            <p>
+              In the EEA, the UK and Switzerland, Google’s certified consent
+              message (IAB TCF) asks whether ads may use cookies or personal
+              data. Without consent, Google shows only limited, non-personalized
+              ads. Google stores your choice, and you can change it any time in
+              Privacy settings. If you decline, you can still read the score,
+              findings and sources.
             </p>
             {umamiConfig() && (
               <p>
-                If you enable Analytics, our self-hosted Umami service counts
-                visits to public page types. All report domains appear as one
-                category. Umami receives your IP address and browser information
-                with each request. We omit search terms, referring pages and
-                account activity. You can turn Analytics off in Privacy
-                settings.
+                Our self-hosted Umami service counts visits to public page types
+                without cookies or local storage. All report domains appear as
+                one category. Umami receives your IP address and browser
+                information with each request. We omit search terms, referring
+                pages and account activity. With Global Privacy Control or Do
+                Not Track on, your browser isn’t counted.
               </p>
             )}
             <p>
-              On free reports, allowing advertising can connect your browser to
-              Google to request an ad. Google then receives technical
-              information such as your IP address. If you decline, you can still
-              read the score, findings and sources.
-            </p>
-            <p>
-              With Global Privacy Control on, only a separate choice for limited
-              Google ads can enable contextual ads, where available. A rewarded
-              ad starts when you also choose to watch it. A guest unlock uses a
+              Rewarded ads for points are not live yet. A guest unlock uses a
               cookie to give this browser access to one domain for 24 hours. If
               you request a sign-in link from this browser during that time,
               opening the link saves eligible unlocked scans to your account.
-              Signed-in Pro members read reports without Google ad scripts.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
-              <ConsentDialogLink
+              <PrivacySettingsLink
+                hideWithoutAds
                 className={buttonVariants({ variant: "secondary", size: "sm" })}
-              >
-                Privacy settings
-              </ConsentDialogLink>
+              />
               <Link className="inline-link" href="/advertising-disclosure">
                 How ads work
               </Link>
@@ -142,19 +140,29 @@ export function PrivacyPage() {
             </p>
           </section>
           <section aria-labelledby="payments">
-            <h2 id="payments">Payments and API credits</h2>
+            <h2 id="payments">Payments and points</h2>
             <p>
-              When you start checkout, DataDeal sends Creem your account email,
-              account ID, selected product and a purchase reference. You enter
-              payment details on Creem’s checkout page. Creem sends payment and
-              subscription updates to DataDeal so we can match a receipt to your
-              account, grant access and track renewals.
+              When you start checkout for Pro or a point pack, DataDeal sends
+              Creem your account email, account ID, selected product and a
+              purchase reference. You enter payment details on Creem’s checkout
+              page. Creem sends payment, refund and subscription updates to
+              DataDeal so we can match a receipt to your account, grant access
+              or points and track renewals.
             </p>
             <p>
-              If you buy or use prepaid API credits, we keep purchase and usage
-              records for your account. Creem handles the credit balance.
-              DataDeal stores a hash of each developer token and lets you revoke
-              it.
+              DataDeal keeps your point balance and a ledger of each change:
+              packs bought or refunded, reports unlocked, queue skips, watched
+              site checks and Developer API requests. Earlier API credit records
+              are kept for history. DataDeal stores a hash of each developer
+              token and lets you revoke it.
+            </p>
+            <p>
+              When you watch a rewarded ad or fly the paper plane, we record the
+              offer, the report it belongs to, whether the ad finished and the
+              points paid. To stop the same browser from repeating an offer, we
+              set a random identifier cookie for 30 days and store only a keyed
+              hash of it. A guest unlock sets a cookie that opens that report in
+              this browser for 24 hours.
             </p>
           </section>
           <section aria-labelledby="extension">

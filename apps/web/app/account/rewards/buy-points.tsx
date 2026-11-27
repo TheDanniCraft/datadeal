@@ -10,7 +10,7 @@ const euro = new Intl.NumberFormat("en-IE", {
 });
 const count = new Intl.NumberFormat("en");
 
-/** Buy a test-mode point pack: pick an amount, then one checkout button. */
+/** Buy a point pack: pick an amount, then one checkout button. */
 export function BuyPoints({
   packs,
   returnTo,
@@ -67,8 +67,7 @@ export function BuyPoints({
             <Modal.Body className="grid gap-4 text-sm">
               <p className="m-0 text-muted">
                 Points open reports, skip the scan line, keep sites updated and
-                pay for Developer API requests. Packs are a one-time test-mode
-                payment.
+                pay for Developer API requests. Packs are a one-time payment.
               </p>
               <div
                 role="radiogroup"

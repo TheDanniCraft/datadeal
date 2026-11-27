@@ -115,6 +115,14 @@ export function creditPackBinding(
 }
 
 const sandboxMode = z.enum(["test", "sandbox"]);
+/** Either Creem mode, normalised to the CREEM_MODE spelling. */
+export const creemMode = z
+  .enum(["test", "sandbox", "prod", "live"])
+  .transform((mode) =>
+    mode === "test" || mode === "sandbox"
+      ? ("test" as const)
+      : ("live" as const),
+  );
 const optionalAmount = z.number().int().nonnegative().nullish();
 const reference = z.union([
   z.string().min(1).max(100),
@@ -202,7 +210,7 @@ const creditPackTarget = z.object({
 export const creemCreditCheckout = z.object({
   object: z.literal("checkout"),
   status: z.literal("completed"),
-  mode: sandboxMode,
+  mode: creemMode,
   request_id: z.uuid(),
   customer: z.object({ id: z.string().min(1).max(160), email: z.email() }),
   product: z.object({
@@ -251,13 +259,13 @@ export function purchasedCreditPack(object: unknown, secret: string) {
 export const creemFullRefund = z.object({
   object: z.literal("refund"),
   status: z.literal("succeeded"),
-  mode: sandboxMode.optional(),
+  mode: creemMode.optional(),
   refund_currency: z.literal("EUR"),
   transaction: z.looseObject({
     id: z.string().min(1).max(100),
     status: z.literal("refunded"),
     type: z.literal("payment").optional(),
-    mode: sandboxMode.optional(),
+    mode: creemMode.optional(),
   }),
   subscription: z.nullish(z.never()),
   order: z
@@ -269,7 +277,7 @@ export const creemRefundedPayment = z
   .object({
     id: z.string(),
     object: z.literal("transaction"),
-    mode: sandboxMode,
+    mode: creemMode,
     type: z.literal("payment"),
     currency: z.literal("EUR"),
     status: z.literal("refunded"),

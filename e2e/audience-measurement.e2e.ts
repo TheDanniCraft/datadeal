@@ -7,9 +7,11 @@ test.skip(
   "Requires a test server configured with a dedicated Umami origin and website ID.",
 );
 
-test("public pageviews honor explicit measurement consent across navigation and revocation", async ({
+test("counts public page types without a consent prompt and skips GPC visitors", async ({
   page,
   context,
+  browser,
+  baseURL,
 }) => {
   test.setTimeout(60_000);
   const requests: {
@@ -46,42 +48,18 @@ test("public pageviews honor explicit measurement consent across navigation and 
   await page.goto(
     "/report/private-lookup.example?email=private%40example.org#evidence-1",
   );
-  await page.getByRole("button", { name: "Reject All", exact: true }).click();
-  const privacy = page
-    .getByRole("button", { name: "Privacy settings", exact: true })
-    .last();
-  async function toggleMeasurement() {
-    await privacy.click();
-    const dialog = page.getByRole("dialog", {
-      name: "Privacy Settings",
-      exact: true,
-    });
-    await dialog
-      .getByRole("switch", { name: "Analytics", exact: true })
-      .click();
-    await dialog
-      .getByRole("button", { name: "Save Settings", exact: true })
-      .click();
-    await expect(dialog).toBeHidden();
-  }
-  expect(requests).toHaveLength(0);
-  await toggleMeasurement();
   await expect.poll(() => requests.length).toBe(1);
-  await toggleMeasurement(); // Withdraw, then accept again on the same page.
-  await toggleMeasurement();
   await page.evaluate(() =>
     history.replaceState(null, "", "?lookup=another.example#another-evidence"),
   );
   await page.locator("footer").getByRole("link", { name: "API docs" }).click();
   await expect(page).toHaveURL(/\/developers$/);
   await expect.poll(() => requests.length).toBe(2);
-  await toggleMeasurement();
   await page
     .locator("footer")
     .getByRole("link", { name: "Terms", exact: true })
     .click();
   await expect(page).toHaveURL(/\/terms$/);
-  await toggleMeasurement();
   await expect.poll(() => requests.length).toBe(3);
   await page.goto("/account/billing?return=private-account");
   await page.locator("footer").waitFor();
@@ -101,4 +79,27 @@ test("public pageviews honor explicit measurement consent across navigation and 
       referer: undefined,
     })),
   );
+
+  // Global Privacy Control opts the browser out of counting.
+  const signaled = await browser.newContext({
+    baseURL,
+    extraHTTPHeaders: { "Sec-GPC": "1" },
+  });
+  try {
+    let gpcRequests = 0;
+    await signaled.route(new URL(origin!).origin + "/**", (route) => {
+      gpcRequests++;
+      return route.fulfill({ status: 200, body: "{}" });
+    });
+    await signaled.addInitScript(() =>
+      Object.defineProperty(navigator, "globalPrivacyControl", { value: true }),
+    );
+    const gpcPage = await signaled.newPage();
+    await gpcPage.goto("/developers");
+    await gpcPage.locator("footer").waitFor();
+    await gpcPage.waitForTimeout(1000);
+    expect(gpcRequests).toBe(0);
+  } finally {
+    await signaled.close();
+  }
 });

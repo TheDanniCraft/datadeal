@@ -45,7 +45,7 @@ export function proFeatures(
     },
     items > 5 && {
       label: "Full score breakdown",
-      detail: `All ${items} items that cost points`,
+      detail: `All ${items} items that lower the score`,
     },
     choices > 1 && {
       label: "Consent comparison",

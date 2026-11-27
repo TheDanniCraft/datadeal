@@ -20,8 +20,7 @@ export function accountReturnPath(value: unknown) {
     value === proCheckoutReturnPath ||
     value === proPlansPath ||
     value === "/account/developer" ||
-    value === "/account/watchlist" ||
-    value === "/account/alerts" ||
+    value === "/account/library" ||
     value === "/data-flow"
   )
     return value;

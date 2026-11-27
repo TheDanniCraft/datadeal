@@ -28,6 +28,7 @@ import {
   type CheckoutReturnQuery,
 } from "../../../lib/checkout-return";
 import { LocalDate } from "../../../lib/local-date";
+import { proPlanFeatures } from "../../../lib/pro-plan";
 
 const smallLink = buttonVariants({ variant: "secondary", size: "sm" });
 
@@ -53,16 +54,10 @@ function PlanTitle({
   );
 }
 
-const proBenefits = [
-  "Ad-free reports",
-  "Advanced analysis wherever available",
-  "Evidence-backed data flows",
-];
-
 function BenefitList() {
   return (
-    <ul className="m-0 grid list-none gap-2 p-4 text-sm sm:grid-cols-3">
-      {proBenefits.map((benefit) => (
+    <ul className="m-0 grid list-none gap-2 p-4 text-sm sm:grid-cols-2">
+      {proPlanFeatures.map((benefit) => (
         <li key={benefit} className="flex items-start gap-2">
           <svg
             className="mt-0.5 shrink-0 text-accent"
@@ -313,7 +308,7 @@ export async function BillingView({
           {billing?.has_access && (
             <AccountSection
               title="Included with Pro"
-              description="Your reports are ad-free and include the advanced analysis wherever available."
+              description="Ad-free, with every advanced report open."
             >
               <AccountCard>
                 <BenefitList />
@@ -324,7 +319,7 @@ export async function BillingView({
       ) : (
         <AccountSection
           title="Pro membership"
-          description="Explore evidence-backed data flows and deeper findings wherever an advanced report is available."
+          description="Ad-free everywhere, every advanced report open, watched sites with email alerts and free skip-the-line scans."
         >
           <AccountCard>
             {billing?.status === "expired" && (

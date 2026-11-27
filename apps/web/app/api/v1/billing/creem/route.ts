@@ -74,7 +74,12 @@ export async function POST(request: Request) {
   const { id, eventType, created_at: time, object } = envelope.data;
   if (eventType === "refund.created") {
     const event = creemFullRefund.safeParse(object);
-    if (connection.mode !== "test" || !event.success)
+    if (
+      !event.success ||
+      [event.data.mode, event.data.transaction.mode].some(
+        (mode) => mode && mode !== connection.mode,
+      )
+    )
       return new Response(null, { status: 200 });
     const transactionId = event.data.transaction.id;
     let payment = creemRefundedPayment.safeParse(event.data.transaction);
@@ -93,11 +98,12 @@ export async function POST(request: Request) {
     }
     if (!payment.success || payment.data.id !== transactionId)
       return new Response(null, { status: 503 });
+    if (payment.data.mode !== connection.mode) return new Response(null);
     const order = payment.data.order;
     let result: string = await database
       .refundPointPackPurchase(order)
       .catch(() => "unavailable" as const);
-    if (result === "missing") {
+    if (result === "missing" && connection.mode === "test") {
       // Orders from before points were bought as Creem-held credits. Those
       // records are kept for history; reversing them never touches points.
       const client = creemCreditsClient();
@@ -161,15 +167,15 @@ export async function POST(request: Request) {
         return new Response(null, { status: 503 });
       }
     }
-    const pack =
-      connection.mode === "test" &&
-      purchasedPointPack(object, connection.secret);
+    const pack = purchasedPointPack(object, connection.secret);
     if (!pack) return new Response(null);
     const completed = creemCreditCheckout.safeParse(object);
     if (!completed.success)
       return new Response("Incomplete point pack payment details", {
         status: 422,
       });
+    // A checkout from the other Creem mode never grants points here.
+    if (completed.data.mode !== connection.mode) return new Response(null);
     const { order, product, metadata, customer } = completed.data;
     if (
       product.id !== pack.product ||

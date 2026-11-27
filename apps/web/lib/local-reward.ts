@@ -1,18 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import { localPointsEnabled, localRewardEnabled } from "./points-flag";
 
-export function localRewardEnabled() {
-  const database = process.env.DATABASE_URL;
-  return (
-    process.env.NODE_ENV === "development" &&
-    (process.env.BETTER_AUTH_SECRET?.length ?? 0) >= 32 &&
-    Boolean(
-      database &&
-      URL.canParse(database) &&
-      ["localhost", "127.0.0.1", "[::1]"].includes(new URL(database).hostname),
-    )
-  );
-}
+export {
+  localPointsEnabled,
+  localRewardEnabled,
+  pointsEnabled,
+} from "./points-flag";
 
 export function localRewardCookie(scanId: string) {
   return "dd-test-reward-" + scanId;
@@ -72,11 +66,6 @@ export function hasLocalReward(scanId: string, value?: string) {
   );
 }
 
-export function localPointsEnabled() {
-  return (
-    localRewardEnabled() && process.env.DATADEAL_LOCAL_SAMPLE_ADS === "true"
-  );
-}
 export const offerBrowserCookie = "dd-reward-browser";
 export function offerBrowserHash(value?: string) {
   if (!localPointsEnabled() || !value || !/^[A-Za-z0-9_-]{43}$/.test(value))

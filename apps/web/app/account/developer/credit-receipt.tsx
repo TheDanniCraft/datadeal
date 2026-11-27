@@ -6,7 +6,7 @@ import {
   isCreditRequestId,
 } from "../../../lib/checkout-return";
 import { database } from "../../../lib/reports";
-import { localPointsEnabled } from "../../../lib/local-reward";
+import { pointsEnabled } from "../../../lib/local-reward";
 import { AccountForm } from "../account-form";
 import Link from "next/link";
 import { buttonVariants } from "@heroui/styles";
@@ -63,9 +63,7 @@ export async function CreditReceipt({ reference }: { reference: string }) {
           >
             <Link
               className={buttonVariants({ variant: "primary", size: "sm" })}
-              href={
-                localPointsEnabled() ? "/account/rewards" : "/account/developer"
-              }
+              href={pointsEnabled() ? "/account/rewards" : "/account/developer"}
             >
               View points
             </Link>

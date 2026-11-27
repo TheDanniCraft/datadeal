@@ -1,20 +1,20 @@
 "use client";
 
-import { Button, Spinner, buttonVariants } from "@heroui/react";
-import { ConsentDialogLink } from "@c15t/nextjs";
+import { Button, Spinner, buttonVariants, toast } from "@heroui/react";
 import { useState } from "react";
 import { flightCap } from "@datadeal/contracts/paper-plane";
-import { useAdvertisingConsent } from "../../../lib/ads/use-advertising-consent";
+import { useTcfConsent } from "../../../lib/ads/use-tcf-consent";
+import { PrivacySettingsLink } from "../../../lib/ads/privacy-settings";
 import { useRewardedAd } from "../../../lib/ads/rewarded-ad";
 import { RewardModal } from "../../rewards/reward-modal";
 import { ReportIcon } from "../../report/[domain]/report-icon";
 
 /**
- * Earn report points without a report: every fully watched ad gives one
+ * Earn points without a report: every fully watched ad gives one
  * paper-plane flight.
  */
 export function FlyForPoints({ freeFlights }: { freeFlights: string[] }) {
-  const consent = useAdvertisingConsent();
+  const consent = useTcfConsent();
   // Flights already earned (e.g. chosen after an ad on a report) fly free.
   const [played, setPlayed] = useState(0);
   const remaining = freeFlights.slice(played);
@@ -27,17 +27,12 @@ export function FlyForPoints({ freeFlights }: { freeFlights: string[] }) {
   const [requested, setRequested] = useState(false);
   const [saving, setSaving] = useState(false);
   const [intent, setIntent] = useState("");
-  const [notice, setNotice] = useState("");
   const [rewardId, setRewardId] = useState<string | null>(null);
-  const limited = consent === "limited";
 
-  useRewardedAd(requested, limited, {
-    onOpen: () => setNotice(""),
+  useRewardedAd(requested, {
+    onOpen: () => {},
     onGranted: () => void complete(intent),
-    onStop: (message) => {
-      setNotice(message);
-      setRequested(false);
-    },
+    onStop: () => setRequested(false),
   });
 
   async function complete(id: string) {
@@ -51,9 +46,8 @@ export function FlyForPoints({ freeFlights }: { freeFlights: string[] }) {
       });
       if (!response.ok) throw Error();
       setRewardId((await response.json()).id);
-      setNotice("");
     } catch {
-      setNotice("Your ad is complete, but the flight could not be saved.");
+      toast.danger("Flight not saved. Try again.");
     } finally {
       setSaving(false);
     }
@@ -61,7 +55,6 @@ export function FlyForPoints({ freeFlights }: { freeFlights: string[] }) {
 
   async function start() {
     setRewardId(null);
-    setNotice("");
     setSaving(true);
     try {
       const response = await fetch("/api/v1/rewards/offers", {
@@ -73,7 +66,7 @@ export function FlyForPoints({ freeFlights }: { freeFlights: string[] }) {
       setIntent((await response.json()).id);
       setRequested(true);
     } catch {
-      setNotice("A flight could not be reserved. Try again.");
+      toast.danger("Flight not reserved. Try again.");
     } finally {
       setSaving(false);
     }
@@ -109,10 +102,19 @@ export function FlyForPoints({ freeFlights }: { freeFlights: string[] }) {
           <ReportIcon name="play" />
           Fly for free
         </Button>
-      ) : consent === "allowed" || consent === "limited" ? (
+      ) : consent === "denied" ? (
+        <PrivacySettingsLink
+          className={buttonVariants({
+            variant: "secondary",
+            className: "min-h-11",
+          })}
+        >
+          Review advertising consent
+        </PrivacySettingsLink>
+      ) : (
         <Button
           className="min-h-11 gap-2"
-          isDisabled={busy}
+          isDisabled={busy || consent === "pending"}
           onPress={() => void start()}
         >
           {busy ? (
@@ -126,20 +128,6 @@ export function FlyForPoints({ freeFlights }: { freeFlights: string[] }) {
               ? "Loading video…"
               : "Watch an ad to fly"}
         </Button>
-      ) : (
-        <ConsentDialogLink
-          className={buttonVariants({
-            variant: "secondary",
-            className: "min-h-11",
-          })}
-        >
-          Review advertising consent
-        </ConsentDialogLink>
-      )}
-      {notice && (
-        <p role="status" className="m-0 text-sm sm:col-span-2">
-          {notice}
-        </p>
       )}
       <RewardModal
         rewardId={rewardId}

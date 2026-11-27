@@ -87,11 +87,6 @@ module.exports = function clientNotices(compiler) {
               "HeroUI Pro components and related assets are proprietary to NextUI Inc. Used under license.",
               label,
             );
-          } else if (pkg.name === "c15t" || pkg.name.startsWith("@c15t/")) {
-            if (pkg.license !== "Apache-2.0")
-              throw new Error("Review the changed c15t license for " + label);
-            add(text(resolve(__dirname, "notices/c15t-NOTICE.txt")), label);
-            add(text(resolve(__dirname, "notices/Apache-2.0.txt")), label);
           } else if (!files.length) {
             missing.push(label);
           }

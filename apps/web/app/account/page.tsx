@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "../../lib/auth";
-import { localPointsEnabled } from "../../lib/local-reward";
+import { pointsEnabled } from "../../lib/local-reward";
 import { database } from "../../lib/reports";
 import { accountReturnPath } from "../../lib/account-return";
 import {
@@ -48,9 +48,9 @@ export default async function AccountPage({
     instructions =
       "Use the email you used for DataDeal. If you’ve already paid, signing in opens your existing membership.";
   } else if (returningFromCreditCheckout) {
-    heading = "Check your credit purchase";
+    heading = "Check your point purchase";
     instructions =
-      "Sign in to the DataDeal account that ordered the credits to see your balance and receipt.";
+      "Sign in to the DataDeal account that bought the points to see your balance and receipt.";
   }
   const session = await auth?.api.getSession({ headers: await headers() });
   if (session && returnTo !== "/account") redirect(returnTo);
@@ -105,7 +105,7 @@ export default async function AccountPage({
       description={"Signed in as " + session.user.email}
       current="/account"
     >
-      <AccountOverview userId={session.user.id} points={localPointsEnabled()} />
+      <AccountOverview userId={session.user.id} points={pointsEnabled()} />
       {profile && (
         <AccountSection
           title="Privacy profile"

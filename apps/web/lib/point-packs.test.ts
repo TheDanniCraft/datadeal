@@ -5,8 +5,8 @@ import {
   pointPackConfig,
   purchasablePointPacks,
 } from "./point-packs";
-import { localPointsEnabled } from "./local-reward";
-vi.mock("./local-reward", () => ({ localPointsEnabled: vi.fn() }));
+import { pointsEnabled } from "./local-reward";
+vi.mock("./local-reward", () => ({ pointsEnabled: vi.fn() }));
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -75,17 +75,22 @@ it("derives one pack from the earlier credit pack only when no point packs are s
   expect(pointPackConfig()).toBeNull();
 });
 
-it("sells packs only in test mode, without Pro products, on a loopback origin with local points", () => {
+it("sells packs in either Creem mode while points are on, never a Pro product", () => {
   sandbox({ CREEM_POINT_PACKS: "10000:500:prod_s" });
-  vi.mocked(localPointsEnabled).mockReturnValue(true);
+  vi.mocked(pointsEnabled).mockReturnValue(true);
   expect(purchasablePointPacks()?.packs).toHaveLength(1);
-  vi.mocked(localPointsEnabled).mockReturnValue(false);
+  vi.mocked(pointsEnabled).mockReturnValue(false);
   expect(purchasablePointPacks()).toBeNull();
-  vi.mocked(localPointsEnabled).mockReturnValue(true);
+  vi.mocked(pointsEnabled).mockReturnValue(true);
+  // A deployed origin and live mode both sell packs now.
   vi.stubEnv("APP_ORIGIN", "https://datadeal.example");
-  expect(purchasablePointPacks()).toBeNull();
-  vi.stubEnv("APP_ORIGIN", "http://127.0.0.1:3000");
   vi.stubEnv("CREEM_MODE", "live");
+  expect(purchasablePointPacks()).toMatchObject({
+    mode: "live",
+    api: "https://api.creem.io",
+    packs: [{ points: 10000, price: 500, product: "prod_s" }],
+  });
+  vi.stubEnv("CREEM_MODE", "unknown");
   expect(purchasablePointPacks()).toBeNull();
   vi.stubEnv("CREEM_MODE", "test");
   vi.stubEnv("CREEM_POINT_PACKS", "10000:500:prod_s,25000:1100:prod_year");

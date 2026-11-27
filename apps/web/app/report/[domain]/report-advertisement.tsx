@@ -1,13 +1,21 @@
 "use client";
 
-import { useAdvertisingConsent } from "../../../lib/ads/use-advertising-consent";
 import { Button } from "@heroui/react";
 import Link from "next/link";
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { adsenseClient } from "../../../lib/ads/adsense";
 import {
   mountGoogleDisplayAd,
   type DisplayAdFailure,
 } from "../../../lib/ads/google-display";
+import { useTcfConsent } from "../../../lib/ads/use-tcf-consent";
 
 const dismissalKey = "datadeal-ad-notice-dismissed";
 
@@ -66,38 +74,18 @@ function FundingNotice() {
   );
 }
 
-function DisplaySlot({
-  path,
-  testAd,
-  limited,
+type Format = "banner" | "rail";
+
+/** The labelled frame shared by AdSense units and local sample units. */
+function AdFrame({
   format,
   side,
+  children,
 }: {
-  path: string;
-  testAd: boolean;
-  limited: boolean;
-  format: "banner" | "rail";
+  format: Format;
   side?: "left" | "right";
+  children: ReactNode;
 }) {
-  const id = "gpt-" + useId();
-  const slot = useRef<HTMLDivElement>(null);
-  const [failure, setFailure] = useState<DisplayAdFailure>();
-  useLayoutEffect(() => {
-    if (!failure && slot.current)
-      return mountGoogleDisplayAd(
-        slot.current,
-        path,
-        setFailure,
-        testAd,
-        limited,
-        format,
-      );
-  }, [path, failure, testAd, limited, format]);
-
-  if (failure)
-    return failure === "load_failed" && format === "banner" ? (
-      <FundingNotice />
-    ) : null;
   if (format === "rail")
     // Only on wide screens, outside the 50rem report column.
     return (
@@ -111,41 +99,139 @@ function DisplaySlot({
         }
       >
         <small className="text-xs text-muted">Advertisement</small>
-        <div id={id} ref={slot} className="mt-1 min-h-[600px]" />
+        <div className="mt-1 min-h-[600px]">{children}</div>
       </aside>
     );
   return (
     <aside className="my-6" aria-label="Advertisement">
       <small className="text-sm text-muted">Advertisement</small>
-      <div id={id} ref={slot} className="mt-1 flex justify-center" />
+      <div className="mt-1 flex justify-center">{children}</div>
     </aside>
   );
 }
 
-export function ReportAdvertisement({
+type AdsByGoogle = { push(options: object): void };
+
+/** One responsive AdSense unit. Google's consent message decides what it may show. */
+function AdSenseSlot({
+  slot,
+  format,
+  side,
+}: {
+  slot: string;
+  format: Format;
+  side?: "left" | "right";
+}) {
+  const unit = useRef<HTMLModElement>(null);
+  const [state, setState] = useState<"shown" | "unfilled" | "blocked">("shown");
+  useEffect(() => {
+    const element = unit.current;
+    if (!element) return;
+    // A hidden rail (narrow screen) has no width for AdSense to fill.
+    if (!element.offsetWidth) {
+      setState("unfilled");
+      return;
+    }
+    // Strict Mode replays effects on the same element: request it once.
+    if (!element.dataset.datadealRequested) {
+      element.dataset.datadealRequested = "1";
+      try {
+        const scope = window as Window & { adsbygoogle?: AdsByGoogle };
+        (scope.adsbygoogle = scope.adsbygoogle || ([] as AdsByGoogle)).push({});
+      } catch {
+        setState("unfilled");
+        return;
+      }
+    }
+    const check = () => {
+      if (element.dataset.adStatus === "unfilled") setState("unfilled");
+    };
+    check();
+    const observer = new MutationObserver(check);
+    observer.observe(element, {
+      attributes: true,
+      attributeFilter: ["data-ad-status"],
+    });
+    // adsbygoogle.js marks every unit it processes; none means it was blocked.
+    const deadline = window.setTimeout(() => {
+      if (!element.dataset.adsbygoogleStatus) setState("blocked");
+    }, 6000);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(deadline);
+    };
+  }, []);
+  if (state === "blocked")
+    return format === "banner" ? <FundingNotice /> : null;
+  if (state === "unfilled") return null;
+  return (
+    <AdFrame format={format} side={side}>
+      <ins
+        ref={unit}
+        className="adsbygoogle w-full"
+        style={{ display: "block" }}
+        data-ad-client={adsenseClient}
+        data-ad-slot={slot}
+        data-ad-format="auto"
+        data-full-width-responsive="true"
+      />
+    </AdFrame>
+  );
+}
+
+/** Google's sample GPT unit, for local development only. */
+function SampleSlot({
   path,
-  limitedPath,
-  testAd = false,
+  format,
+  side,
+}: {
+  path: string;
+  format: Format;
+  side?: "left" | "right";
+}) {
+  const id = "gpt-" + useId();
+  const slot = useRef<HTMLDivElement>(null);
+  const [failure, setFailure] = useState<DisplayAdFailure>();
+  useLayoutEffect(() => {
+    if (!failure && slot.current)
+      return mountGoogleDisplayAd(slot.current, path, setFailure, format);
+  }, [path, failure, format]);
+
+  if (failure)
+    return failure === "load_failed" && format === "banner" ? (
+      <FundingNotice />
+    ) : null;
+  return (
+    <AdFrame format={format} side={side}>
+      <div id={id} ref={slot} className="w-full" />
+    </AdFrame>
+  );
+}
+
+function SampleAdvertisement(props: {
+  path: string;
+  format: Format;
+  side?: "left" | "right";
+}) {
+  return useTcfConsent() === "allowed" ? <SampleSlot {...props} /> : null;
+}
+
+export function ReportAdvertisement({
+  slot,
+  samplePath,
   format = "banner",
   side,
 }: {
-  path?: string;
-  limitedPath?: string;
-  testAd?: boolean;
-  format?: "banner" | "rail";
+  /** AdSense ad unit id. Without one nothing renders. */
+  slot?: string;
+  /** Google's sample GPT unit (local development only). */
+  samplePath?: string;
+  format?: Format;
   side?: "left" | "right";
 }) {
-  const consent = useAdvertisingConsent();
-  const limited = consent === "limited";
-  const unit = limited ? limitedPath : consent === "allowed" ? path : undefined;
-  return unit ? (
-    <DisplaySlot
-      key={unit + (limited ? "-limited" : "")}
-      path={unit}
-      testAd={testAd}
-      limited={limited}
-      format={format}
-      side={side}
-    />
-  ) : null;
+  if (samplePath)
+    return (
+      <SampleAdvertisement path={samplePath} format={format} side={side} />
+    );
+  return slot ? <AdSenseSlot slot={slot} format={format} side={side} /> : null;
 }

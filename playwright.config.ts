@@ -44,14 +44,12 @@ export default defineConfig({
             : "playwright",
           DATADEAL_DEMO: selfAssessment ? "false" : "true",
           DATABASE_URL: needsDatabase ? testDatabase! : "",
-          DATADEAL_GOOGLE_AD_UNIT:
-            !selfAssessment && adDomain ? "/123456/test-report" : "",
-          DATADEAL_LOCAL_SAMPLE_ADS: rewardDomain
-            ? "true"
-            : (process.env.DATADEAL_LOCAL_SAMPLE_ADS ?? "false"),
-          DATADEAL_GOOGLE_LIMITED_AD_UNIT: selfAssessment
-            ? ""
-            : (process.env.DATADEAL_GOOGLE_LIMITED_AD_UNIT ?? ""),
+          // Display ads in browser tests use Google's local sample units.
+          DATADEAL_LOCAL_SAMPLE_ADS:
+            rewardDomain || (!selfAssessment && adDomain)
+              ? "true"
+              : (process.env.DATADEAL_LOCAL_SAMPLE_ADS ?? "false"),
+          DATADEAL_ADSENSE: process.env.DATADEAL_ADSENSE ?? "",
           ...(authOutbox && {
             APP_ORIGIN: testOrigin,
             DATADEAL_MAIL_MODE: "local",

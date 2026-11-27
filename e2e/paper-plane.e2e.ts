@@ -18,8 +18,6 @@ test("redeems a guest choice ticket after sign-in and spends earned points exact
   const base = baseURL!;
   const post = (path: string, data: Record<string, unknown>) =>
     ctx.request.post(base + path, { headers: { Origin: base }, data });
-  const consent = () =>
-    page.getByRole("button", { name: "Accept All", exact: true }).click();
   const hydrate = () =>
     page.waitForFunction(() => {
       const el = document.querySelector("main button");
@@ -67,7 +65,6 @@ queued.forEach(callback => callback());
     waitUntil: "domcontentloaded",
   });
   await hydrate();
-  await consent();
   await page.getByText("Choose your reward", { exact: true }).click();
   await page.getByText("Choose after the ad", { exact: true }).click();
   await expect(
@@ -136,28 +133,15 @@ queued.forEach(callback => callback());
   ).toBeVisible();
   await page.getByRole("link", { name: "Open points wallet" }).click();
   await expect(
-    page.getByRole("heading", { name: "Report points", exact: true }),
+    page.getByRole("heading", { name: "Points", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Flight banked", { exact: false })).toBeVisible();
   await page.goto(base + "/report/" + domain, {
     waitUntil: "domcontentloaded",
   });
   await hydrate();
-  await page.getByText("Choose your reward", { exact: true }).click();
-  await page.getByText("Save 50 report points", { exact: true }).click();
-  await expect(
-    page.getByRole("radio", { name: "Save 50 report points" }),
-  ).toBeChecked();
-  await page.getByRole("button", { name: "Watch an ad for 50 points" }).click();
-  await expect(
-    page.getByRole("heading", { name: "50 points added" }),
-  ).toBeVisible();
-  await page.goto(base + "/report/" + domain, {
-    waitUntil: "domcontentloaded",
-  });
-  await hydrate();
-  await page.getByRole("button", { name: "Use report points" }).click();
-  await page.getByRole("button", { name: "Unlock for 50 points" }).click();
+  // Needs a balance of at least 150 points (the unlock price) by now.
+  await page.getByRole("button", { name: "Unlock for 150 points" }).click();
   await expect(
     page.getByRole("heading", { name: "Where your data flows", exact: true }),
   ).toBeVisible();

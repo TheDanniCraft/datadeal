@@ -3,7 +3,7 @@ import {
   defaultRefreshPointCost,
   defaultReportPointCost,
 } from "@datadeal/contracts/paper-plane";
-import { localPointsEnabled } from "./local-reward";
+import { pointsEnabled } from "./local-reward";
 
 export const developerApiPreview =
   process.env.NODE_ENV === "development" &&
@@ -11,12 +11,12 @@ export const developerApiPreview =
 
 /**
  * API requests are paid in points: a saved report read costs the same as a
- * report unlock, a new scan the same as a rescan. Points are local-only.
+ * report unlock, a new scan the same as a rescan. Null while points are off.
  */
-export const developerReportReadCost = localPointsEnabled()
+export const developerReportReadCost = pointsEnabled()
   ? defaultReportPointCost
   : null;
-export const developerScanCost = localPointsEnabled()
+export const developerScanCost = pointsEnabled()
   ? defaultRefreshPointCost
   : null;
 

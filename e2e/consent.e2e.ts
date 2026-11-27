@@ -272,44 +272,85 @@ test("recognizes a late German accept-all notice separately from purchases and u
   }
 });
 
-test("rejects optional consent and reopens preferences after navigation", async ({
+const googleHosts =
+  /^https:\/\/(?:[^/]+\.)?(?:googlesyndication\.com|doubleclick\.net|googletagservices\.com|fundingchoicesmessages\.google\.com|adtrafficquality\.google)\//;
+
+test("loads no Google script and hides Privacy settings while AdSense is off", async ({
   page,
 }) => {
-  await page.goto("/");
-  const reject = page.getByRole("button", {
-    name: /reject all|reject optional/i,
+  test.skip(
+    process.env.DATADEAL_ADSENSE === "true",
+    "Requires the server without AdSense",
+  );
+  const google: string[] = [];
+  page.on("request", (request) => {
+    if (googleHosts.test(request.url())) google.push(request.url());
   });
-  await expect(reject).toBeVisible();
-  await reject.click();
-  await expect(reject).toBeHidden();
-  await page.goto("/advertising-disclosure");
-  await expect(reject).toBeHidden();
+  for (const path of ["/", "/privacy", "/advertising-disclosure"]) {
+    await page.goto(path);
+    await expect(page.locator("footer")).toBeVisible();
+    await expect(
+      page
+        .locator("footer")
+        .getByRole("button", { name: "Privacy settings", exact: true }),
+    ).toHaveCount(0);
+  }
   await expect(
-    page.getByRole("heading", { name: "What remains free" }),
-  ).toBeVisible();
-  await page.getByText("Review your privacy settings", { exact: true }).click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible();
+    page.locator("html[data-ads], script#datadeal-adsense"),
+  ).toHaveCount(0);
   await expect(
-    dialog.getByText(/marketing|advertising/i).first(),
-  ).toBeVisible();
-  await dialog.getByRole("button", { name: /accept all/i }).click();
-  await expect(dialog).toBeHidden();
+    page.getByRole("link", { name: "Review your privacy settings" }),
+  ).toHaveAttribute("href", "/privacy#reports");
+  expect(google).toEqual([]);
+});
+
+test("opens Google's revocation message from Privacy settings", async ({
+  page,
+}) => {
+  test.skip(
+    process.env.DATADEAL_ADSENSE !== "true",
+    "Requires a server with DATADEAL_ADSENSE=true",
+  );
+  await page.route(
+    "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js**",
+    (route) =>
+      route.fulfill({
+        contentType: "application/javascript",
+        body: `
+          window.googlefc = window.googlefc || {};
+          window.googlefc.showRevocationMessage = () => {
+            document.body.dataset.revocationShown = "true";
+          };
+          const queue = window.googlefc.callbackQueue || [];
+          window.googlefc.callbackQueue = { push: (fn) => fn() };
+          queue.forEach((fn) => fn());
+        `,
+      }),
+  );
+  await page.goto("/");
+  await page
+    .locator("footer")
+    .getByRole("button", { name: "Privacy settings", exact: true })
+    .click();
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-revocation-shown",
+    "true",
+  );
 });
 
 const adTestDomain = process.env.DATADEAL_AD_TEST_DOMAIN;
 
-test("keeps the report readable when the publisher script is blocked", async ({
+test("keeps the report readable when the sample publisher script is blocked", async ({
   page,
 }) => {
-  test.skip(!adTestDomain, "Requires a stored report and a local ad unit");
+  test.skip(!adTestDomain, "Requires a stored report and local sample ads");
   const publisherTag = "https://securepubads.g.doubleclick.net/tag/js/gpt.js";
   await page.route(publisherTag, (route) => route.abort("blockedbyclient"));
-  await page.goto("/report/" + adTestDomain);
   const blocked = page.waitForEvent("requestfailed", {
     predicate: (request) => request.url() === publisherTag,
   });
-  await page.getByRole("button", { name: /accept all/i }).click();
+  // Without a consent management platform, local sample ads load directly.
+  await page.goto("/report/" + adTestDomain);
   await blocked;
   await expect(
     page.getByRole("complementary", { name: "Advertisement", exact: true }),
@@ -322,77 +363,93 @@ test("keeps the report readable when the publisher script is blocked", async ({
   await notice.getByRole("button", { name: "Close", exact: true }).click();
   await expect(notice).toHaveCount(0);
   await page.reload();
-  await expect(
-    page.getByRole("complementary", { name: "Partner advertisement" }),
-  ).toHaveCount(0);
   await expect(notice).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: "Sources", exact: true }),
   ).toBeVisible();
-  // A configured reward slot has its own opt-in and handles no fill independently.
-  const offer = page.getByRole("button", { name: "Watch an ad to unlock" });
-  if (await offer.isVisible()) {
-    await offer.click();
-    await expect(
-      page.getByText("The Google test ad script could not load."),
-    ).toBeVisible();
-    await expect(offer).toHaveCount(0);
-  }
 });
 
-test("loads the publisher tag only after advertising is accepted", async ({
+const fakePublisherTag = `
+  const queue = window.googletag.cmd;
+  queue.push = callback => callback();
+  let render;
+  const publisher = {
+    addEventListener(_, callback) { render = callback; },
+    removeEventListener() { render = undefined; },
+  };
+  Object.assign(window.googletag, {
+    apiReady: true,
+    defineSlot: () => ({ addService() {} }),
+    pubads() { return publisher; },
+    enableServices() {},
+    display(slot) {
+      const empty = location.search.includes("no-fill");
+      if (!empty) document.body.dataset.adDisplayed = "true";
+      else document.body.dataset.adEmpty = "true";
+      render({ slot, isEmpty: empty });
+    },
+    destroySlots() { delete document.body.dataset.adDisplayed; },
+  });
+  queue.forEach(callback => callback());
+`;
+
+test("loads the sample publisher tag only with TCF consent and hides an empty slot", async ({
   page,
+  context,
 }) => {
-  test.skip(
-    !adTestDomain,
-    "Requires a stored non-fixture report and configured local ad unit",
-  );
+  test.skip(!adTestDomain, "Requires a stored report and local sample ads");
   const tagRequests: string[] = [];
-  await page
-    .context()
-    .route(
-      "https://securepubads.g.doubleclick.net/tag/js/gpt.js",
-      async (route) => {
-        tagRequests.push(route.request().frame().url());
-        await route.fulfill({
-          contentType: "application/javascript",
-          body: `
-      const queue = window.googletag.cmd;
-      queue.push = callback => callback();
-      let render;
-      const publisher = {
-        addEventListener(_, callback) { render = callback; },
-        removeEventListener() { render = undefined; },
-      };
-      Object.assign(window.googletag, {
-        apiReady: true,
-        defineSlot: () => ({ addService() {} }),
-        pubads() { return publisher; },
-        enableServices() {},
-        display(slot) {
-          const empty = location.search.includes("no-fill");
-          if (!empty) document.body.dataset.adDisplayed = "true";
-          else document.body.dataset.adEmpty = "true";
-          render({ slot, isEmpty: empty });
-        },
-        destroySlots() { delete document.body.dataset.adDisplayed; },
+  await context.route(
+    "https://securepubads.g.doubleclick.net/tag/js/gpt.js",
+    async (route) => {
+      tagRequests.push(route.request().frame().url());
+      await route.fulfill({
+        contentType: "application/javascript",
+        body: fakePublisherTag,
       });
-      queue.forEach(callback => callback());
-    `,
-        });
+    },
+  );
+  const refused = await context.newPage();
+  // A minimal IAB TCF API without purpose 1 consent.
+  await refused.addInitScript(() =>
+    Reflect.set(
+      window,
+      "__tcfapi",
+      (
+        command: string,
+        _version: number,
+        callback: (data: object, success: boolean) => void,
+      ) => {
+        if (command === "addEventListener")
+          callback(
+            {
+              eventStatus: "tcloaded",
+              gdprApplies: true,
+              listenerId: 1,
+              purpose: { consents: { 1: false } },
+            },
+            true,
+          );
       },
-    );
-  await page.goto("/report/" + adTestDomain);
-  const accept = page.getByRole("button", { name: /accept all/i });
-  await expect(accept).toBeVisible();
+    ),
+  );
+  await refused.goto("/report/" + adTestDomain);
+  await expect(
+    refused.getByRole("region", { name: /^(AI analysis|Scan summary)$/ }),
+  ).toBeVisible();
+  await expect(
+    refused.getByRole("complementary", { name: "Advertisement", exact: true }),
+  ).toHaveCount(0);
   expect(tagRequests).toHaveLength(0);
-  await accept.click();
+  await refused.close();
+
+  await page.goto("/report/" + adTestDomain);
   await expect(page.locator("body")).toHaveAttribute(
     "data-ad-displayed",
     "true",
   );
   expect(tagRequests).toHaveLength(1);
-  const emptyPage = await page.context().newPage();
+  const emptyPage = await context.newPage();
   await emptyPage.goto("/report/" + adTestDomain + "?no-fill");
   await expect(emptyPage.locator("body")).toHaveAttribute(
     "data-ad-empty",
@@ -407,142 +464,5 @@ test("loads the publisher tag only after advertising is accepted", async ({
   await expect(
     emptyPage.getByRole("dialog", { name: "Help fund the next scan" }),
   ).toHaveCount(0);
-  await expect(
-    emptyPage.getByRole("region", { name: /^(AI analysis|Scan summary)$/ }),
-  ).toBeVisible();
-  expect(tagRequests).toHaveLength(2);
   await emptyPage.close();
-  await page.getByRole("button", { name: "Privacy settings" }).click();
-  await Promise.all([
-    page.waitForEvent("domcontentloaded"),
-    page
-      .getByRole("dialog")
-      .getByRole("button", { name: /reject all/i })
-      .click(),
-  ]);
-  await expect(
-    page.getByRole("complementary", { name: "Advertisement", exact: true }),
-  ).toHaveCount(0);
-  await expect(page.locator("body")).not.toHaveAttribute("data-ad-displayed");
-  expect(tagRequests).toHaveLength(2);
-  const freshPage = await page.context().newPage();
-  await freshPage.goto("/report/" + adTestDomain);
-  await expect(
-    freshPage.getByRole("heading", { name: adTestDomain }),
-  ).toBeVisible();
-  await expect(
-    freshPage.getByRole("button", { name: /accept all/i }),
-  ).toBeHidden();
-  await expect(
-    freshPage.getByRole("complementary", {
-      name: "Advertisement",
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  expect(tagRequests).toHaveLength(2);
-});
-
-test("leaves the placement empty on a declined visit and requests limited GPT only after a specific GPC-compatible grant", async ({
-  page,
-}) => {
-  test.skip(
-    !process.env.DATADEAL_REWARDED_AD_TEST_DOMAIN,
-    "Requires configured local sample ads",
-  );
-  await page.setExtraHTTPHeaders({ "Sec-GPC": "1" });
-  await page.addInitScript(() =>
-    Object.defineProperty(navigator, "globalPrivacyControl", {
-      get: () => true,
-    }),
-  );
-  const standard: string[] = [],
-    limited: string[] = [],
-    partnerNetwork: string[] = [];
-  await page.route("https://securepubads.g.doubleclick.net/**", (r) => {
-    standard.push(r.request().url());
-    return r.abort();
-  });
-  await page.route("https://clipify.us/**", (r) => {
-    partnerNetwork.push(r.request().url());
-    return r.abort();
-  });
-  await page.route(
-    "https://pagead2.googlesyndication.com/tag/js/gpt.js",
-    (route) => {
-      limited.push(route.request().url());
-      return route.fulfill({
-        contentType: "application/javascript",
-        body: `
-      const pending = window.googletag.cmd;
-      let limited = false;
-      const pub = {addEventListener(){},removeEventListener(){},setPrivacySettings(p){limited = p.limitedAds === true && p.restrictDataProcessing === true;}};
-      Object.assign(window.googletag,{cmd:{push:f=>f()},apiReady:true,pubads:()=>pub,defineSlot:()=>({addService(){}}),enableServices(){},destroySlots(){},display(){document.body.dataset.googleMode=limited?'limited':'unexpected';}});
-      pending.forEach(fn=>fn());`,
-      });
-    },
-  );
-  await page.goto("/report/" + process.env.DATADEAL_REWARDED_AD_TEST_DOMAIN);
-  await page.getByRole("button", { name: "Reject All", exact: true }).click();
-  const partner = page.getByRole("complementary", {
-    name: "Partner advertisement",
-  });
-  await expect(partner).toHaveCount(0);
-  expect(standard.length + limited.length + partnerNetwork.length).toBe(0);
-  await page
-    .getByRole("button", { name: "Privacy settings", exact: true })
-    .click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Accept All", exact: true })
-    .click();
-  await expect(page.locator("body")).toHaveAttribute(
-    "data-google-mode",
-    "limited",
-  );
-  await expect(partner).toHaveCount(0);
-  expect(limited).toHaveLength(1);
-  expect(standard).toHaveLength(0);
-  expect(partnerNetwork).toHaveLength(0);
-});
-test("offers first-visit GPC choices without an unconfigured Google ad option", async ({
-  page,
-  context,
-}) => {
-  test.skip(
-    Boolean(
-      process.env.DATADEAL_TEST_URL ||
-      process.env.DATADEAL_REWARDED_AD_TEST_DOMAIN ||
-      process.env.DATADEAL_GOOGLE_LIMITED_AD_UNIT ||
-      process.env.DATADEAL_LOCAL_SAMPLE_ADS === "true",
-    ),
-    "Requires the isolated server without limited inventory",
-  );
-  await page.setExtraHTTPHeaders({ "Sec-GPC": "1" });
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  const banner = page.getByText("Optional privacy settings", { exact: true });
-  await expect(banner).toBeVisible();
-  await page.getByRole("button", { name: "Customize", exact: true }).click();
-  const settings = page.getByRole("dialog", {
-    name: "Privacy Settings",
-    exact: true,
-  });
-  await expect(
-    settings.getByRole("switch", { name: "Analytics", exact: true }),
-  ).toBeVisible();
-  await expect(
-    settings.getByRole("switch", { name: /Marketing|Limited Google ads/ }),
-  ).toHaveCount(0);
-  await settings
-    .getByRole("button", { name: "Reject All", exact: true })
-    .click();
-  await expect
-    .poll(async () =>
-      (await context.cookies()).some((cookie) => cookie.name === "c15t"),
-    )
-    .toBe(true);
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(
-    page.getByRole("button", { name: "Privacy settings", exact: true }),
-  ).toBeVisible();
-  await expect(banner).toHaveCount(0);
 });

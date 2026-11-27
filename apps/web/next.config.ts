@@ -1,4 +1,3 @@
-import { withConsentManifest } from "@c15t/nextjs/build";
 import type { NextConfig } from "next";
 import { resolve } from "node:path";
 
@@ -48,6 +47,11 @@ const config: NextConfig = {
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // No script/frame/connect/img allowlist on purpose: AdSense, Google's
+          // consent message and ad creatives load from many Google hosts,
+          // including country domains (adservice.google.<tld>). Google advises
+          // against allowlist CSPs for AdSense; a nonce-based strict-dynamic
+          // policy is the supported alternative if fetch directives are added.
           {
             key: "Content-Security-Policy",
             value:
@@ -58,4 +62,4 @@ const config: NextConfig = {
     ];
   },
 };
-export default withConsentManifest(config);
+export default config;

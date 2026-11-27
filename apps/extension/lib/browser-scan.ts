@@ -60,8 +60,6 @@ function within<T>(work: Promise<T>, ms: number): Promise<T> {
 }
 const scriptTimeout = 8_000;
 const visitTimeout = 75_000;
-const trace = (...parts: unknown[]) =>
-  console.debug("[browser-scan]", ...parts);
 
 async function waitForLoad(tabId: number, timeout = 15_000) {
   const deadline = Date.now() + timeout;
@@ -291,7 +289,6 @@ async function visit(
     const navigationStartedAt = new Date().toISOString();
     await browser.tabs.update(tabId, { url: requested.href });
     await waitForLoad(tabId);
-    trace(scenario, "loaded");
     const loaded = await browser.tabs.get(tabId);
     if (!onSite(loaded.url)) return { outcome: "inconclusive", pages };
     homepage = new URL(new URL(loaded.url!).origin + "/");
@@ -315,7 +312,6 @@ async function visit(
         () => undefined,
       );
       choiceStart = requests;
-      trace(scenario, "click");
       await within(
         browser.scripting.executeScript({
           target: { tabId, frameIds: [found.frameId] },
@@ -334,9 +330,7 @@ async function visit(
     const landed = new URL((await browser.tabs.get(tabId)).url ?? "");
     if (landed.origin !== homepage.origin)
       return { outcome: "inconclusive", pages };
-    trace(scenario, "settled");
     const end = await snapshot(tabId, storeId, homepage);
-    trace(scenario, "snapshot");
     const endSnapshotAt = new Date().toISOString();
 
     if (capturePages) {
@@ -434,8 +428,7 @@ async function visit(
         },
       },
     };
-  } catch (error) {
-    trace(scenario, "failed", String(error));
+  } catch {
     return { outcome: "inconclusive", pages };
   } finally {
     browser.webRequest.onBeforeRequest.removeListener(onBefore);
@@ -469,7 +462,6 @@ export async function runBrowserScan(
       visit(finalHome, scenario, scenario === "default", opened),
       visitTimeout,
     ).catch(async () => {
-      trace(scenario, "visit timed out");
       // Close the stuck private window so the next visit starts clean.
       for (const id of opened) await browser.windows.remove(id).catch(() => {});
       await delay(400);
@@ -484,7 +476,6 @@ export async function runBrowserScan(
         finalHome = new URL(new URL(result.visit.visitedUrl).origin + "/");
     }
     if (result.pages.length) pages = result.pages;
-    trace(scenario, result.outcome);
   }
   onProgress({ step: "done", index: 3, total: 3 });
   const agent = navigator.userAgent;

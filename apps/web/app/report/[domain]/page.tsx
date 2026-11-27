@@ -24,7 +24,7 @@ import {
   visitorSummary,
 } from "../../../lib/visitor-summary";
 import { publicPolicyHighlights } from "../../../lib/policy-highlights";
-import { limitedDisplayUnit } from "../../../lib/ads/inventory";
+import { adsenseSlots, sampleDisplayUnit } from "../../../lib/ads/adsense";
 import { acceptedExposureSummary } from "../../../lib/accepted-exposure";
 import {
   publicReportEvidence,
@@ -48,6 +48,7 @@ import {
   localRewardEnabled,
   localPointsEnabled,
   localRewardHolder,
+  pointsEnabled,
 } from "../../../lib/local-reward";
 
 export const dynamic = "force-dynamic";
@@ -117,8 +118,9 @@ export default async function ReportPage({
   const pro =
     session && database ? await database.hasPro(session.user.id) : false;
   // Enough points open the report without an ad.
+  const points = pointsEnabled();
   const pointBalance =
-    session && database && localPointsEnabled()
+    session && database && points
       ? (await database.reportPointWallet(session.user.id)).balance
       : 0;
   const rewardCookies = report && localRewardEnabled() ? await cookies() : null;
@@ -151,12 +153,19 @@ export default async function ReportPage({
           (entry) => entry.scanId !== report.id,
         )
       : [];
-  // A site this account monitors keeps every new report open.
+  // A points watch opens the scans completed since the watch started, not
+  // the ones before it.
   const monitoring =
-    session && database && localPointsEnabled()
+    session && database && points
       ? await database.monitorFor(session.user.id, host)
       : null;
-  const scanReward = localReward || accountReward || Boolean(monitoring);
+  const watchedScan = Boolean(
+    monitoring &&
+    report &&
+    !report.demo &&
+    new Date(report.completedAt).getTime() >= monitoring.since.getTime(),
+  );
+  const scanReward = localReward || accountReward || watchedScan;
   const saved =
     session && database
       ? await database.isSaved(session.user.id, host)
@@ -351,16 +360,11 @@ export default async function ReportPage({
     (query["ad-test"] === "1" ||
       process.env.DATADEAL_LOCAL_SAMPLE_ADS === "true"),
   );
-  const configuredAdUnit = testAd
-    ? "/6355419/Travel/Europe/France/Paris"
-    : pro
-      ? undefined
-      : process.env.DATADEAL_GOOGLE_AD_UNIT;
-  const adUnit =
-    !report?.demo &&
-    configuredAdUnit &&
-    /^\/[0-9]+(?:,[0-9]+)?(?:\/[A-Za-z0-9_.-]+)+$/.test(configuredAdUnit)
-      ? configuredAdUnit
+  // Google's sample GPT unit in local development; AdSense units otherwise.
+  const sampleAdUnit = testAd ? sampleDisplayUnit : undefined;
+  const adSlots =
+    report && !report.demo && !pro && !sampleAdUnit
+      ? adsenseSlots()
       : undefined;
   const current = history[0]?.state;
   const blockedScan = current === "failed" && history[0]?.failure === "blocked";
@@ -472,7 +476,8 @@ export default async function ReportPage({
         }
         defaultBrowserObserved={Boolean(defaultVisit)}
         adPreview={
-          !adUnit &&
+          !sampleAdUnit &&
+          !adSlots &&
           !pro &&
           process.env.NODE_ENV === "development" &&
           query["ad-preview"] === "1"
@@ -487,17 +492,14 @@ export default async function ReportPage({
         keepUpdated={
           !session || !report || report.demo
             ? undefined
-            : pro &&
-                (proWatching ||
-                  proWatches < proIncludedWatches ||
-                  !localPointsEnabled())
+            : pro && (proWatching || proWatches < proIncludedWatches || !points)
               ? {
                   mode: "pro",
                   watching: proWatching,
                   balance: 0,
                   included: { used: proWatches, limit: proIncludedWatches },
                 }
-              : localPointsEnabled()
+              : points
                 ? {
                     mode: "points",
                     watching: Boolean(monitoring),
@@ -507,7 +509,7 @@ export default async function ReportPage({
                 : undefined
         }
         boost={
-          session && localPointsEnabled() && current === "queued"
+          session && points && current === "queued"
             ? {
                 scanId: history[0].id,
                 balance: pointBalance,
@@ -528,19 +530,20 @@ export default async function ReportPage({
         }
         scanAvailable={Boolean(database)}
         previousRewardedScan={previousRewardedScan}
-        limitedAdUnit={!pro && !report?.demo ? limitedDisplayUnit() : undefined}
-        adUnit={adUnit}
-        testAd={testAd}
+        adSlots={adSlots}
+        sampleAdUnit={sampleAdUnit}
         rewardTest={
-          testAd &&
-          localRewardEnabled() &&
           report &&
+          !report.demo &&
+          !pro &&
           snapshotDetails &&
-          scan === undefined
+          scan === undefined &&
+          ((testAd && localRewardEnabled()) || (points && session))
             ? {
                 host,
                 scanId: report.id,
-                game: localPointsEnabled(),
+                game: points,
+                ads: testAd && localRewardEnabled(),
                 signedIn: Boolean(session),
                 pointBalance,
               }

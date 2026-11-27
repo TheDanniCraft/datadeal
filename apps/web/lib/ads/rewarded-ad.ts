@@ -1,11 +1,8 @@
 "use client";
 
+import { toast } from "@heroui/react";
 import { useEffect, useRef } from "react";
-import {
-  configurePublisherPrivacy,
-  publisherScript,
-  type PublisherPrivacy,
-} from "./publisher-tag";
+import { publisherScript } from "./publisher-tag";
 
 type RewardedSlot = { addService(service: unknown): void };
 type Events = {
@@ -16,7 +13,7 @@ type Events = {
   slotRequested: { slot: RewardedSlot };
   slotResponseReceived: { slot: RewardedSlot };
 };
-type Publisher = PublisherPrivacy & {
+type Publisher = {
   addEventListener<K extends keyof Events>(
     name: K,
     listener: (event: Events[K]) => void,
@@ -41,9 +38,37 @@ export type RewardedAdHandlers = {
   onOpen(): void;
   /** The ad was watched to the end and closed: grant the reward. */
   onGranted(): void;
-  /** No reward: blocked, no inventory, or closed early. */
+  /**
+   * No reward: blocked, no inventory, or closed early. The hook already told
+   * the visitor with a short toast; `noInventory` hides the ad button.
+   */
   onStop(message: string, noInventory: boolean): void;
 };
+
+/** Short, one-line reasons an ad ended without a reward. */
+const stops = {
+  blocked: {
+    title: "Ad blocked by your browser.",
+    description: "Allow ads for this site to continue.",
+    tone: "warning",
+  },
+  empty: { title: "No ad available right now.", tone: "warning" },
+  closed: { title: "Ad closed before the end.", tone: "warning" },
+  failed: { title: "The ad could not load. Try again.", tone: "danger" },
+  unsupported: {
+    title: "Ads are not available in this browser.",
+    tone: "warning",
+  },
+} as const;
+type Stop = keyof typeof stops;
+
+function announce(reason: Stop) {
+  const stop: { title: string; description?: string; tone: string } =
+    stops[reason];
+  const show = stop.tone === "danger" ? toast.danger : toast.warning;
+  show(stop.title, { description: stop.description });
+  return stop.title;
+}
 
 /**
  * Shows one Google rewarded ad while `requested` is true and reports how it
@@ -51,7 +76,6 @@ export type RewardedAdHandlers = {
  */
 export function useRewardedAd(
   requested: boolean,
-  limited: boolean,
   handlers: RewardedAdHandlers,
 ) {
   const latest = useRef(handlers);
@@ -70,25 +94,12 @@ export function useRewardedAd(
     let phase:
       "loading_tag" | "waiting_for_request" | "requested" | "responded" =
       "loading_tag";
-    const stop = (message: string, noInventory = false) => {
+    const stop = (reason: Stop, noInventory = false) => {
       active = false;
-      latest.current.onStop(message, noInventory);
+      latest.current.onStop(announce(reason), noInventory);
     };
     const timeout = window.setTimeout(
-      () =>
-        stop(
-          {
-            loading_tag:
-              "Your browser or an extension blocked Google’s ad service, so no video could load. Firefox’s tracking protection does this even after you accept ads here. You can allow it for this site with the shield icon in the address bar, or get the report with Pro.",
-            waiting_for_request:
-              "The ad service loaded but did not confirm sending a video request.",
-            requested:
-              "The video was requested. Google did not confirm a response in time.",
-            responded:
-              "Google responded, but the video did not become ready to play.",
-          }[phase],
-          true,
-        ),
+      () => stop(phase === "loading_tag" ? "blocked" : "failed", true),
       20000,
     );
     const onRequest = (event: Events["slotRequested"]) => {
@@ -102,7 +113,7 @@ export function useRewardedAd(
       window.clearTimeout(timeout);
       if (displayed) return;
       displayed = event.makeRewardedVisible();
-      if (!displayed) stop("The ad could not open. Try again later.", true);
+      if (!displayed) stop("failed", true);
       else latest.current.onOpen();
     };
     const onGrant = (event: Events["rewardedSlotGranted"]) => {
@@ -112,37 +123,24 @@ export function useRewardedAd(
       if (!active || event.slot !== slot) return;
       active = false;
       if (!granted) {
-        latest.current.onStop(
-          "The ad was closed before a reward was granted.",
-          false,
-        );
+        latest.current.onStop(announce("closed"), false);
         return;
       }
       latest.current.onGranted();
     };
     const onRender = (event: Events["slotRenderEnded"]) => {
-      if (active && event.slot === slot && event.isEmpty)
-        stop("No ad is available right now. Try again later.", true);
+      if (active && event.slot === slot && event.isEmpty) stop("empty", true);
     };
-    const script = publisherScript(limited);
-    if (!script) {
-      window.clearTimeout(timeout);
-      stop("No compatible ad is available on this visit.", true);
-      return;
-    }
+    const script = publisherScript();
     tag.cmd.push(() => {
       if (!active) return;
       publisher = tag.pubads();
-      if (!configurePublisherPrivacy(publisher, limited)) {
-        stop("No compatible ad is available on this visit.", true);
-        return;
-      }
       slot = tag.defineOutOfPageSlot(
         "/22639388115/rewarded_web_example",
         tag.enums.OutOfPageFormat.REWARDED,
       );
       if (!slot) {
-        stop("Rewarded ads are unavailable in this browser.", true);
+        stop("unsupported", true);
         return;
       }
       publisher.addEventListener("rewardedSlotReady", onReady);
@@ -156,11 +154,7 @@ export function useRewardedAd(
       phase = "waiting_for_request";
       tag.display(slot);
     });
-    const failed = () =>
-      stop(
-        "Your browser or an extension blocked Google’s ad script. You can allow it for this site (in Firefox: the shield icon in the address bar), or get the report with Pro.",
-        true,
-      );
+    const failed = () => stop("blocked", true);
     script.addEventListener("error", failed, { once: true });
     if (!script.isConnected) document.head.append(script);
     return () => {
@@ -175,5 +169,5 @@ export function useRewardedAd(
       publisher?.removeEventListener("slotRenderEnded", onRender);
       if (slot) tag.destroySlots([slot]);
     };
-  }, [requested, limited]);
+  }, [requested]);
 }

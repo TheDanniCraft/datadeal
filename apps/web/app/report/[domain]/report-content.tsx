@@ -16,6 +16,7 @@ import {
   ReportCitations,
 } from "./evidence-dialog";
 import { ReportAdvertisement } from "./report-advertisement";
+import type { AdSenseSlots } from "../../../lib/ads/adsense";
 import { RequestScan } from "./request-scan";
 import { ConsentTable } from "./consent-table";
 import { ScanProgress } from "./scan-progress";
@@ -1959,9 +1960,8 @@ export function ReportContent({
   defaultBrowserObserved,
   policyHighlights,
   adPreview,
-  adUnit,
-  limitedAdUnit,
-  testAd,
+  adSlots,
+  sampleAdUnit,
   rewardTest,
   minimizeData,
   changes,
@@ -1984,9 +1984,9 @@ export function ReportContent({
   blocked?: boolean;
   /** 1 = next to start, while the scan waits. */
   queuePosition?: number;
-  /** Report points to skip the scan queue, for signed-in visitors. */
+  /** Points to skip the scan queue, for signed-in visitors. */
   boost?: { scanId: string; balance: number; freeLeft?: number };
-  /** Watching: daily rescans with points, or Pro's included weekly ones. */
+  /** Watching: scheduled rechecks paid in points, or Pro's included weekly ones. */
   keepUpdated?: {
     watching: boolean;
     mode: "pro" | "points";
@@ -2035,13 +2035,16 @@ export function ReportContent({
   defaultBrowserObserved: boolean;
   policyHighlights: ReturnType<typeof publicPolicyHighlights>;
   adPreview: boolean;
-  adUnit?: string;
-  limitedAdUnit?: string;
-  testAd: boolean;
+  /** AdSense unit ids for non-Pro visitors (DATADEAL_ADSENSE=true). */
+  adSlots?: AdSenseSlots;
+  /** Google's sample GPT unit (local development only). */
+  sampleAdUnit?: string;
   rewardTest?: {
     host: string;
     scanId: string;
     game?: boolean;
+    /** Offer the sample rewarded ad (local development only). */
+    ads?: boolean;
     signedIn?: boolean;
     pointBalance?: number;
   };
@@ -3125,16 +3128,14 @@ export function ReportContent({
           {overview}
           {/* Below the score and summary, never above them. */}
           <ReportAdvertisement
-            path={adUnit}
-            limitedPath={limitedAdUnit}
-            testAd={testAd}
+            slot={adSlots?.banner}
+            samplePath={sampleAdUnit}
           />
           {(["left", "right"] as const).map((side) => (
             <ReportAdvertisement
               key={side}
-              path={adUnit}
-              limitedPath={limitedAdUnit}
-              testAd={testAd}
+              slot={adSlots?.rail}
+              samplePath={sampleAdUnit}
               format="rail"
               side={side}
             />

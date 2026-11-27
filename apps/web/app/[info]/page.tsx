@@ -3,13 +3,20 @@ import { notFound, redirect } from "next/navigation";
 import { MethodologyPage } from "./methodology-page";
 import { PrivacyPage } from "./privacy-page";
 import { getPricing } from "@datadeal/config";
-import { ConsentDialogLink } from "@c15t/nextjs";
+import { PrivacySettingsLink } from "../../lib/ads/privacy-settings";
 import { AdvertisingFaq, AdvertisingPrivacyHelp } from "./advertising-faq";
 import { database } from "../../lib/reports";
 import { auth } from "../../lib/auth";
 import { billingConfig } from "../../lib/billing";
 import { proPlansPath } from "../../lib/checkout-return";
 import { PricingPlans } from "./pricing-plans";
+import { PointsPricing } from "./points-pricing";
+import { localPointsEnabled, pointsEnabled } from "../../lib/local-reward";
+import { developerApiPreview } from "../../lib/developer-token";
+import {
+  defaultReportPointCost,
+  flightCap,
+} from "@datadeal/contracts/paper-plane";
 
 const pages = {
   methodology: [
@@ -46,6 +53,9 @@ export default async function InfoPage({
   if (info === "methodology") return <MethodologyPage />;
   const [title, summary] = pages[info as keyof typeof pages];
   const checkout = info === "pricing" && auth && database && billingConfig();
+  const points = pointsEnabled();
+  // Earning points and rewarded unlocks need the sample ad unit (local only).
+  const sampleAds = localPointsEnabled();
   const pricing = getPricing();
   const formatPrice = (cents: number) =>
     new Intl.NumberFormat("en-IE", {
@@ -96,29 +106,44 @@ export default async function InfoPage({
                 Unlock one report
               </h2>
               <p className="m-0! text-sm leading-relaxed text-muted">
-                Watch a short ad to open the advanced report for one domain for
-                24 hours. Sign in to keep it in your account.
+                {sampleAds
+                  ? "Watch a short ad to open the advanced report for one domain for 24 hours. Sign in to keep it in your account."
+                  : points
+                    ? `Spend ${defaultReportPointCost} points to open the advanced report for one scan and keep it in your account.`
+                    : "Free reports show the rating, verdict and key findings. Pro opens every advanced report."}
               </p>
-              <Link
-                className="inline-link text-sm"
-                href="/advertising-disclosure"
-              >
-                How ads work
-              </Link>
+              {sampleAds ? (
+                <Link
+                  className="inline-link text-sm"
+                  href="/advertising-disclosure"
+                >
+                  How ads work
+                </Link>
+              ) : (
+                points && (
+                  <Link className="inline-link text-sm" href="#points-title">
+                    How points work
+                  </Link>
+                )
+              )}
             </section>
             <section className="grid content-start gap-2 rounded-3xl border border-separator p-6">
               <h2 className="m-0! text-base font-semibold">
                 Building with DataDeal?
               </h2>
               <p className="m-0! text-sm leading-relaxed text-muted">
-                Query ratings and findings from your own tools with prepaid API
-                credits.
+                {developerApiPreview
+                  ? "Query ratings and findings from your own tools, paid in points."
+                  : "Query ratings and findings from your own tools. The API is in preview and not open yet."}
               </p>
               <Link className="inline-link text-sm" href="/developers">
                 Explore the API
               </Link>
             </section>
           </div>
+          {points && (
+            <PointsPricing earn={sampleAds} formatPrice={formatPrice} />
+          )}
         </>
       )}
       {info === "learn" && (
@@ -150,37 +175,73 @@ export default async function InfoPage({
         </dl>
       )}
       {info === "terms" && (
-        <p>
-          Each report identifies its scan date and evidence.{" "}
-          <Link className="inline-link" href="/methodology">
-            Review the methodology
-          </Link>{" "}
-          to understand its scope, or{" "}
-          <Link className="inline-link" href="/pricing">
-            view the access and subscription terms
-          </Link>
-          .
-          {process.env.NODE_ENV === "production" && (
-            <>
-              {" "}
-              <a
-                className="inline-link"
-                href="/_next/static/licenses/third-party-notices.txt"
-              >
-                Third-party software notices
-              </a>
-            </>
-          )}
-        </p>
+        <>
+          <p>
+            Each report identifies its scan date and evidence.{" "}
+            <Link className="inline-link" href="/methodology">
+              Review the methodology
+            </Link>{" "}
+            to understand its scope, or{" "}
+            <Link className="inline-link" href="/pricing">
+              view the access and subscription terms
+            </Link>
+            .
+            {process.env.NODE_ENV === "production" && (
+              <>
+                {" "}
+                <a
+                  className="inline-link"
+                  href="/_next/static/licenses/third-party-notices.txt"
+                >
+                  Third-party software notices
+                </a>
+              </>
+            )}
+          </p>
+          <h2>Points</h2>
+          <ul className="list-disc space-y-2 pl-6">
+            <li>
+              Points pay for DataDeal features, such as opening an advanced
+              report, skipping the scan queue, rechecking a watched site or a
+              Developer API request. They have no cash value and can’t be
+              exchanged for money.
+            </li>
+            <li>
+              Points belong to your account and can’t be transferred, sold or
+              moved to another account.
+            </li>
+            <li>
+              Bought points are not refundable, except that a pack you haven’t
+              used any points from can be refunded in full through the payment
+              provider. A refund removes the pack’s points.
+            </li>
+            <li>
+              Paper-plane flights are a free bonus, not a purchase. Each flight
+              ends at a random point drawn evenly from 1 to {flightCap}. Collect
+              before it ends to keep the points shown; if it ends first, the
+              flight pays 0 points.
+            </li>
+            <li>
+              When you delete your account, its points are deleted with it and
+              can’t be restored.
+            </li>
+            <li>
+              Prices in points and point packs can change. We announce changes
+              on the pricing page before they apply; points you already hold
+              keep their balance.
+            </li>
+          </ul>
+        </>
       )}
       {info === "advertising-disclosure" && (
         <>
           <h2>Where ads appear</h2>
           <p>
-            A free report can show Google ads when you allow advertising and an
-            ad is available. With Global Privacy Control, a separate limited-ads
-            preference allows contextual Google ads on eligible reports. A
-            rewarded unlock requires a separate choice.
+            Visitors without Pro can see Google AdSense ads on free reports. In
+            the EEA, the UK and Switzerland, Google’s certified consent message
+            (IAB TCF) asks first whether ads may use cookies or personal data;
+            without consent Google shows only limited, non-personalized ads.
+            Rewarded ads for points are not live yet.
           </p>
           <h2>What remains free</h2>
           <p>
@@ -188,7 +249,9 @@ export default async function InfoPage({
             source links are free to read. Pro members see ad-free reports when
             signed in.
           </p>
-          <ConsentDialogLink>Review your privacy settings</ConsentDialogLink>
+          <PrivacySettingsLink className="inline-link">
+            Review your privacy settings
+          </PrivacySettingsLink>
           <AdvertisingPrivacyHelp />
           <h2>Frequently asked questions</h2>
           <AdvertisingFaq />

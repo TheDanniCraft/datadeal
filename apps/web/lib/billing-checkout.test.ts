@@ -2,8 +2,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import { POST } from "../app/api/v1/billing/checkout/route";
 import { checkoutBinding } from "./billing";
 import { pointPackBinding } from "./point-packs";
-import { localPointsEnabled } from "./local-reward";
-vi.mock("./local-reward", () => ({ localPointsEnabled: vi.fn() }));
+import { pointsEnabled } from "./local-reward";
+vi.mock("./local-reward", () => ({ pointsEnabled: vi.fn() }));
 
 const { getSession, billingSummary, recordSandboxCreditProduct } = vi.hoisted(
   () => ({
@@ -31,7 +31,7 @@ const secret = "sandbox-signing-secret";
 const checkoutUrl = "https://checkout.creem.io/ch_sandbox";
 
 function configure() {
-  vi.mocked(localPointsEnabled).mockReturnValue(true);
+  vi.mocked(pointsEnabled).mockReturnValue(true);
   for (const [key, value] of Object.entries({
     APP_ORIGIN: origin,
     CREEM_MODE: "test",
@@ -74,11 +74,11 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 
-it("withholds point packs while local points are off and rejects unknown packs", async () => {
+it("withholds point packs while points are off and rejects unknown packs", async () => {
   const provider = configure();
-  vi.mocked(localPointsEnabled).mockReturnValue(false);
+  vi.mocked(pointsEnabled).mockReturnValue(false);
   expect((await POST(request("points"))).status).toBe(503);
-  vi.mocked(localPointsEnabled).mockReturnValue(true);
+  vi.mocked(pointsEnabled).mockReturnValue(true);
   expect((await POST(request("points", origin, "prod_other"))).status).toBe(
     400,
   );
@@ -173,12 +173,22 @@ it("does not create checkout for untrusted origins, guests, or an existing Pro s
   expect(provider).not.toHaveBeenCalled();
 });
 
-it("keeps the sandbox point checkout closed on a hosted origin", async () => {
+it("opens a live point checkout on a hosted origin", async () => {
   const provider = configure();
   const deployed = "https://datadeal.example";
   vi.stubEnv("APP_ORIGIN", deployed);
-  expect((await POST(request("points", deployed))).status).toBe(503);
-  expect(provider).not.toHaveBeenCalled();
+  vi.stubEnv("CREEM_MODE", "live");
+  provider.mockImplementationOnce(() =>
+    Promise.resolve(
+      Response.json({ checkout_url: "https://checkout.creem.io/ch_live" }),
+    ),
+  );
+  expect((await POST(request("points", deployed))).status).toBe(200);
+  const [[url, options]] = provider.mock.calls;
+  expect(url).toBe("https://api.creem.io/v1/checkouts");
+  expect(JSON.parse(options.body).success_url).toMatch(
+    deployed + "/account/developer/return/",
+  );
 });
 
 it("rejects a provider response that points outside Creem", async () => {

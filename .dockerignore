@@ -8,7 +8,6 @@
 !apps/worker/package.json
 !apps/web/package.json
 !apps/web/tsconfig.json
-!apps/web/c15t.config.ts
 !apps/web/next.config.ts
 !apps/web/postcss.config.mjs
 !apps/web/proxy.ts
@@ -20,6 +19,7 @@
 !apps/web/app/fonts/Inter.ttf
 !apps/web/app/fonts/Inter-OFL.txt
 !apps/web/lib/**/*.ts
+!apps/web/lib/**/*.tsx
 !apps/web/scripts/build.mjs
 !apps/web/scripts/build-standalone.mjs
 !apps/web/scripts/check-heroui-pro.mjs
@@ -27,7 +27,6 @@
 !apps/web/scripts/prepare-package-links.cjs
 !apps/web/scripts/standalone-notices.mjs
 !apps/web/scripts/notices/Apache-2.0.txt
-!apps/web/scripts/notices/c15t-NOTICE.txt
 !apps/web/scripts/notices/core-js-3.38.1-LICENSE.txt
 !apps/web/public/favicons/bild.png
 !apps/web/public/favicons/facebook.ico

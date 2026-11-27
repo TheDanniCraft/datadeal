@@ -106,13 +106,11 @@ test("measures the local DataDeal report before choice, after rejection and afte
   await expect(
     page.getByRole("region", { name: /^(AI analysis|Scan summary)$/ }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Accept All", exact: true }),
-  ).toBeVisible();
   const freeBeforeChoice = await page.evaluate(async () => {
     // Return names only for known consent storage. Cookie values, account
     // tokens and any unexpected or visitor-specific keys stay in the browser.
-    const consentKeys = new Set(["c15t-sid", "c15t"]);
+    // Google's consent message (Funding Choices) stores its choice here.
+    const consentKeys = new Set(["FCCDCF", "FCNEC"]);
     const cookies = await window.cookieStore.getAll();
     return {
       visibleConsentCookies: cookies

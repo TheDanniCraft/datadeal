@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { buttonVariants } from "@heroui/styles/components/button";
+import { proPlanFeatures } from "../../lib/pro-plan";
 
 type Billing = "monthly" | "yearly";
 
@@ -115,6 +116,7 @@ export function PricingPlans({
             items={[
               "Privacy rating and verdict",
               "Key findings with linked sources",
+              "Save sites to your Library",
               "Browser extension for quick checks",
             ]}
           />
@@ -170,10 +172,9 @@ export function PricingPlans({
           <Features
             items={[
               "Everything in Free",
-              "Every advanced report",
+              ...proPlanFeatures,
               "Interactive data flows",
               "Scan history and policy changes",
-              "Ad-free browsing",
             ]}
           />
         </section>

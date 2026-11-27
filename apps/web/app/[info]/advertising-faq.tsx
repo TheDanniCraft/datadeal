@@ -1,6 +1,5 @@
 "use client";
 
-import { useAdvertisingConsent } from "../../lib/ads/use-advertising-consent";
 import { Tabs } from "@heroui/react";
 import { useSyncExternalStore } from "react";
 
@@ -136,21 +135,14 @@ function BrowserGuidance() {
 }
 
 export function AdvertisingPrivacyHelp() {
-  const consent = useAdvertisingConsent();
-  const status = {
-    "privacy-signal":
-      "Personalized advertising is off under Global Privacy Control. Limited Google ads require a separate choice in Privacy settings when available.",
-    limited:
-      "You’ve allowed limited Google ads. Google receives technical information such as your IP address to serve ads without personalization. Watching a rewarded ad is a separate choice.",
-    allowed:
-      "You’ve allowed Google advertising. Ads can appear on eligible free reports, and you can change this choice in Privacy settings.",
-    "needs-choice":
-      "Google advertising is off until you allow it in Privacy settings.",
-  };
   return (
     <section id="browser-privacy" className="scroll-mt-6 space-y-3">
       <h2 className="mt-8 text-2xl">Browser privacy settings</h2>
-      <p aria-live="polite">{status[consent]}</p>
+      <p>
+        In the EEA, the UK and Switzerland, Google’s consent message asks before
+        ads use cookies or personal data. You can change that choice any time in
+        Privacy settings.
+      </p>
       <p>
         Global Privacy Control (GPC) asks sites to limit the sale or sharing of
         your data. Tracking protection can block known trackers. An ad-blocking

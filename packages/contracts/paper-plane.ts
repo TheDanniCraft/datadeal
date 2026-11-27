@@ -10,7 +10,7 @@ export const queueBoostCost = 225;
 export const proIncludedWatches = 2;
 /** Pro includes this many free "skip the line" boosts per calendar month. */
 export const proMonthlyBoosts = 5;
-/** Watched sites rescan daily, at this discount on a manual rescan. */
+/** Watched sites recheck on their schedule (hourly to every 90 days, or a cron); each check costs this discount off a manual rescan. */
 export const watchDiscount = 0.1;
 /** The most requested sites rescan weekly for free. */
 export const freeRescanSites = 50;

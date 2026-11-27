@@ -15,7 +15,7 @@ import {
   describePointPacks,
   purchasablePointPacks,
 } from "../../../lib/point-packs";
-import { localPointsEnabled } from "../../../lib/local-reward";
+import { pointsEnabled } from "../../../lib/local-reward";
 import {
   developerApiPreview,
   developerReportReadCost,
@@ -63,7 +63,7 @@ export default async function DeveloperAccountPage({
   const reference = checkoutReference("credits", await searchParams);
   if (reference) return <CreditReceipt reference={reference} />;
   const session = await auth?.api.getSession({ headers: await headers() });
-  const points = localPointsEnabled();
+  const points = pointsEnabled();
   // API credits were merged into points. The earlier local credit ledger is
   // listed for history; the Creem-held wallet is only in the account export.
   const account =

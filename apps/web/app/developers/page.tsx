@@ -2,6 +2,8 @@ import Link from "next/link";
 import { AccountLink, AccountIcon } from "../account/account-ui";
 import { ApiExample, ApiRates } from "./api-reference";
 import { Chip } from "@heroui/react/chip";
+import { developerApiPreview } from "../../lib/developer-token";
+import { localPointsEnabled } from "../../lib/local-reward";
 
 export const metadata = {
   title: "Developer API documentation",
@@ -36,18 +38,27 @@ const endpoints = [
   ],
 ] as const;
 export default function DevelopersPage() {
+  // The API only answers where the preview is switched on (local development).
+  const open = developerApiPreview;
   return (
     <article className="mx-auto max-w-5xl space-y-8 py-8 md:py-16">
       <header className="max-w-prose space-y-4">
         <span className="grid size-12 place-items-center rounded-xl bg-accent-soft">
           <AccountIcon name="docs" />
         </span>
-        <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
+        <h1 className="flex flex-wrap items-center gap-3 text-4xl font-semibold tracking-tight md:text-5xl">
           API documentation
+          {!open && (
+            <Chip size="sm" variant="soft" color="warning">
+              Preview
+            </Chip>
+          )}
         </h1>
         <p>
           Read a website’s privacy report or send a domain through the same scan
           queue DataDeal uses on the web.
+          {!open &&
+            " The API is in preview and not open to requests yet; this page describes how it will work."}
         </p>
       </header>
       <div className="grid items-start gap-8 md:grid-cols-[12rem_minmax(0,1fr)]">
@@ -83,7 +94,11 @@ export default function DevelopersPage() {
             <ApiRates />
             <p>
               Requests are paid with points, the same points that open reports
-              on the site. Buy a pack or earn them by flying the paper plane.
+              on the site.
+              {open &&
+                (localPointsEnabled()
+                  ? " Buy a pack or earn them by flying the paper plane."
+                  : " Buy a pack on your Points page.")}{" "}
               Your developer account shows the balance and the points each
               request used. Failed or unusable scans are refunded automatically,
               and retries aren't charged twice.

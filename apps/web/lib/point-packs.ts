@@ -1,11 +1,12 @@
 import { z } from "zod";
 import {
   creemConnection,
+  creemMode,
   matchesSignature,
   purchasedCreditPack,
   signature,
 } from "./billing";
-import { localPointsEnabled } from "./local-reward";
+import { pointsEnabled } from "./local-reward";
 
 export type PointPack = { points: number; price: number; product: string };
 
@@ -56,10 +57,10 @@ function legacyCreditPack(env: NodeJS.ProcessEnv) {
   return [{ points: Number(credits) * 100, price: Number(price), product }];
 }
 
-/** Point packs for Creem test mode only, never sharing a Pro product. */
+/** Point packs for either Creem mode, never sharing a Pro product. */
 export function pointPackConfig(env: NodeJS.ProcessEnv = process.env) {
   const connection = creemConnection();
-  if (connection?.mode !== "test") return null;
+  if (!connection) return null;
   const packs = env.CREEM_POINT_PACKS?.trim()
     ? parsePointPacks(env.CREEM_POINT_PACKS)
     : legacyCreditPack(env);
@@ -75,17 +76,9 @@ export function pointPackConfig(env: NodeJS.ProcessEnv = process.env) {
   return { ...connection, packs };
 }
 
-/** Packs a signed-in buyer may open a checkout for: local points, loopback origin. */
+/** Packs a signed-in buyer may open a checkout for, while points are on. */
 export function purchasablePointPacks() {
-  const origin = process.env.APP_ORIGIN;
-  if (
-    !localPointsEnabled() ||
-    !origin ||
-    !URL.canParse(origin) ||
-    !["localhost", "127.0.0.1", "[::1]"].includes(new URL(origin).hostname)
-  )
-    return null;
-  return pointPackConfig();
+  return pointsEnabled() ? pointPackConfig() : null;
 }
 
 export function pointPackBinding(
@@ -130,9 +123,9 @@ export function describePointPacks(packs: PointPack[]): PointPackOffer[] {
   });
 }
 
-const sandboxCheckout = z.object({
+const packCheckout = z.object({
   object: z.literal("checkout"),
-  mode: z.enum(["test", "sandbox"]),
+  mode: creemMode,
   request_id: z.uuid(),
   product: z.union([
     z.string().min(1).max(100),
@@ -147,14 +140,14 @@ const sandboxCheckout = z.object({
 });
 
 /**
- * The pack a completed sandbox checkout was signed for. A checkout opened for
+ * The pack a completed checkout was signed for. A checkout opened for
  * the earlier credit pack is honoured in points (1 credit = 100 points).
  */
 export function purchasedPointPack(
   object: unknown,
   secret: string,
 ): PointPack | null {
-  const target = sandboxCheckout.safeParse(object);
+  const target = packCheckout.safeParse(object);
   if (!target.success) return null;
   const { product, metadata, request_id } = target.data;
   const { datadeal_pack_points: points, datadeal_price_cents: price } =

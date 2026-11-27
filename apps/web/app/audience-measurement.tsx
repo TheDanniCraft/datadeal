@@ -1,10 +1,26 @@
 "use client";
 
-import { useConsent, useExplicitChoice } from "@c15t/nextjs";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { publicPageCategory } from "../lib/umami";
 
+/** Global Privacy Control or Do Not Track opts the visitor out of counting. */
+function privacySignal() {
+  const scope = navigator as Navigator & {
+    globalPrivacyControl?: boolean;
+    msDoNotTrack?: string;
+  };
+  const dnt =
+    scope.doNotTrack ??
+    scope.msDoNotTrack ??
+    (window as Window & { doNotTrack?: string }).doNotTrack;
+  return scope.globalPrivacyControl === true || dnt === "1" || dnt === "yes";
+}
+
+/**
+ * Self-hosted, cookieless Umami: no cookies or local storage, so no consent
+ * prompt. Only coarse public page types are counted.
+ */
 export function AudienceMeasurement({
   endpoint,
   websiteId,
@@ -12,9 +28,8 @@ export function AudienceMeasurement({
   endpoint: string;
   websiteId: string;
 }) {
-  const effective = useConsent("measurement");
-  const choice = useExplicitChoice();
-  const allowed = effective && choice?.categories.measurement?.value === true;
+  const [allowed, setAllowed] = useState(false);
+  useEffect(() => setAllowed(!privacySignal()), []);
   const pathname = usePathname();
   const consentPeriod = useRef<AbortController | null>(null);
   const visit = useRef({ pathname: "", sent: false });
@@ -32,8 +47,8 @@ export function AudienceMeasurement({
   useEffect(() => {
     const url = publicPageCategory(pathname);
     if (visit.current.pathname !== pathname) {
-      // c15t reloads the page when a permission is revoked. Retain only the
-      // coarse page type in this history entry so re-consent won't count it twice.
+      // Retain only the coarse page type in this history entry so a reload or
+      // back navigation to the same entry isn't counted twice.
       const resumed =
         !visit.current.pathname &&
         url &&

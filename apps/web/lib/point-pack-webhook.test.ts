@@ -15,7 +15,7 @@ const { database } = vi.hoisted(() => ({
   },
 }));
 vi.mock("./reports", () => ({ database }));
-vi.mock("./local-reward", () => ({ localPointsEnabled: () => true }));
+vi.mock("./local-reward", () => ({ pointsEnabled: () => true }));
 vi.mock("./auth", () => ({
   auth: {
     api: {
@@ -178,6 +178,17 @@ it("grants a signed point pack checkout's points through the local ledger only",
   expect((await deliver(event)).status).toBe(200);
   database.settlePointPackPurchase.mockRejectedValueOnce(Error("offline"));
   expect((await deliver(event)).status).toBe(503);
+
+  // In live mode the same signed checkout settles, and a sandbox one does not.
+  vi.stubEnv("CREEM_MODE", "live");
+  database.settlePointPackPurchase.mockClear();
+  expect((await deliver(event)).status).toBe(200);
+  expect(database.settlePointPackPurchase).not.toHaveBeenCalled();
+  expect(
+    (await deliver({ ...event, object: { ...event.object, mode: "prod" } }))
+      .status,
+  ).toBe(200);
+  expect(database.settlePointPackPurchase).toHaveBeenCalledOnce();
   expect(database.settleCreemCreditPurchase).not.toHaveBeenCalled();
   expect(database.applyBillingEvent).not.toHaveBeenCalled();
 });
@@ -277,4 +288,42 @@ it("removes a refunded pack's points once and keeps earlier credit refunds as hi
   database.recordApiCreditPaymentRefund.mockResolvedValueOnce("applied");
   expect((await refund()).status).toBe(200);
   expect(lookup).not.toHaveBeenCalled();
+});
+
+it("removes a refunded live pack's points without touching earlier test credits", async () => {
+  vi.stubEnv("CREEM_MODE", "live");
+  vi.stubGlobal("fetch", vi.fn());
+  const transaction = {
+    id: "tran_live",
+    object: "transaction",
+    type: "payment",
+    mode: "prod",
+    currency: "EUR",
+    status: "refunded",
+    amount_paid: 500,
+    refunded_amount: 500,
+    order: "ord_live",
+  };
+  const refund = (mode: string) =>
+    deliver({
+      id: "evt_refund_live",
+      eventType: "refund.created",
+      created_at: 1700000000000,
+      object: {
+        object: "refund",
+        status: "succeeded",
+        mode,
+        refund_currency: "EUR",
+        subscription: null,
+        order: { id: "ord_live", product: "prod_small" },
+        transaction: { ...transaction, mode },
+      },
+    });
+  expect((await refund("sandbox")).status).toBe(200);
+  expect(database.refundPointPackPurchase).not.toHaveBeenCalled();
+  database.refundPointPackPurchase.mockResolvedValueOnce("applied");
+  expect((await refund("prod")).status).toBe(200);
+  expect(database.refundPointPackPurchase).toHaveBeenCalledWith("ord_live");
+  expect(database.reverseCreemCreditPurchase).not.toHaveBeenCalled();
+  expect(database.recordApiCreditPaymentRefund).not.toHaveBeenCalled();
 });

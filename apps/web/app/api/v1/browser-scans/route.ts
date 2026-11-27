@@ -29,8 +29,7 @@ export async function POST(request: Request) {
   if (!database || !auth)
     return Response.json({ code: "unavailable" }, { status: 503 });
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session)
-    return Response.json({ code: "sign_in" }, { status: 401 });
+  if (!session) return Response.json({ code: "sign_in" }, { status: 401 });
   const parsed = browserScanUpload.safeParse(
     await request.json().catch(() => null),
   );
@@ -48,16 +47,4 @@ export async function POST(request: Request) {
   return Response.json(result, {
     status: result.status === "duplicate" ? 409 : 202,
   });
-}
-
-/** The next blocked site this signed-in visitor could help measure. */
-export async function GET() {
-  if (!database || !auth)
-    return Response.json({ code: "unavailable" }, { status: 503 });
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) return Response.json({ code: "sign_in" }, { status: 401 });
-  const domain = await database.nextBrowserScan(session.user.id);
-  return domain
-    ? Response.json({ domain })
-    : new Response(null, { status: 204 });
 }

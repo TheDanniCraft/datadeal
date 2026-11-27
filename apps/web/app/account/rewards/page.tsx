@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth } from "../../../lib/auth";
-import { localPointsEnabled } from "../../../lib/local-reward";
+import { localPointsEnabled, pointsEnabled } from "../../../lib/local-reward";
 import { database } from "../../../lib/reports";
 import {
   AccountCard,
@@ -10,7 +10,10 @@ import {
   AccountSection,
   AccountStat,
 } from "../account-ui";
-import { defaultReportPointCost } from "@datadeal/contracts/paper-plane";
+import {
+  defaultReportPointCost,
+  flightCap,
+} from "@datadeal/contracts/paper-plane";
 import { pointOperations as operations } from "./operations";
 import { LocalDate } from "../../../lib/local-date";
 import { RewardFromQuery } from "../../rewards/reward-modal";
@@ -21,7 +24,9 @@ import {
   purchasablePointPacks,
 } from "../../../lib/point-packs";
 export default async function RewardsWallet() {
-  if (!localPointsEnabled() || !database) notFound();
+  if (!pointsEnabled() || !database) notFound();
+  // Earning points needs a rewarded ad unit; only the local sample one exists.
+  const earn = localPointsEnabled();
   const session = await auth?.api.getSession({ headers: await headers() });
   if (!session) redirect("/account?returnTo=/account/rewards");
   const wallet = await database.reportPointWallet(session.user.id);
@@ -29,7 +34,11 @@ export default async function RewardsWallet() {
   return (
     <AccountScreen
       title="Points"
-      description="Points open advanced reports without an ad, keep sites updated and pay for Developer API requests. Earn them by flying the paper plane, or buy a pack."
+      description={
+        earn
+          ? "Points open advanced reports without an ad, keep sites updated and pay for Developer API requests. Earn them by flying the paper plane, or buy a pack."
+          : "Points open advanced reports, skip the scan queue, keep watched sites updated and pay for Developer API requests. Buy a pack to get them."
+      }
       current="/account/rewards"
     >
       <AccountCard>
@@ -63,8 +72,21 @@ export default async function RewardsWallet() {
           )}
         </AccountRow>
       </AccountCard>
-      <FlyForPoints freeFlights={wallet.tickets.map((ticket) => ticket.id)} />
-      <RewardFromQuery signedIn />
+      {earn ? (
+        <>
+          <FlyForPoints
+            freeFlights={wallet.tickets.map((ticket) => ticket.id)}
+          />
+          <RewardFromQuery signedIn />
+        </>
+      ) : (
+        <AccountCard>
+          <AccountRow
+            title="Earn points (coming soon)"
+            description={`Watch a short ad, then fly the paper plane for 1–${flightCap} points.`}
+          />
+        </AccountCard>
+      )}
       <AccountSection title="Recent activity">
         {wallet.activity.length ? (
           <AccountCard>

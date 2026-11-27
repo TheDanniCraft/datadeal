@@ -90,8 +90,6 @@ test("shows a labeled sample graph and keeps the fictional report separate from 
   page,
 }) => {
   await page.goto(report);
-  const reject = page.getByRole("button", { name: "Reject All", exact: true });
-  await page.addLocatorHandler(reject, () => reject.click());
   const preview = page.getByRole("region", { name: "Advanced report preview" });
   await expect(
     preview.getByText("Example data flow", { exact: true }),
@@ -131,8 +129,8 @@ test("distinguishes a publisher script that never initialized from an empty vide
     loaderRequests++;
     return route.fulfill({ contentType: "text/javascript", body: "" });
   });
+  // Without a consent management platform, local sample ads load directly.
   await page.goto(report, { waitUntil: "domcontentloaded" });
-  await page.getByRole("button", { name: "Accept All", exact: true }).click();
   await expect.poll(() => loaderRequests).toBe(1);
   await page.clock.install();
   const offer = page.getByRole("button", { name: "Watch an ad to unlock" });
@@ -162,9 +160,6 @@ for (const outcome of Object.keys(
     async ({ page }) => {
       const loaderRequests = await mockPublisher(page, outcome);
       await page.goto(report, { waitUntil: "domcontentloaded" });
-      await page
-        .getByRole("button", { name: "Accept All", exact: true })
-        .click();
       const body = page.locator("body");
       await expect(body).toHaveAttribute("data-banner-rendered", "true");
       expect(loaderRequests()).toBe(1);
@@ -184,198 +179,55 @@ for (const outcome of Object.keys(
   );
 }
 
-test("updates the reward option for fresh and saved advertising preferences", async ({
-  page,
-  browser,
-  baseURL,
-}) => {
-  test.setTimeout(60_000);
-  let requests = 0;
-  await page.route(publisher, (route) => {
-    requests++;
-    return route.abort("blockedbyclient");
-  });
-  await page.goto(report);
-  await expect(
-    page.getByRole("button", { name: "Review advertising consent" }),
-  ).toBeVisible();
-  await expect(page.locator("a[data-branding]")).toHaveCount(0);
-  expect(requests).toBe(0);
-  await page.getByRole("button", { name: "Accept All", exact: true }).click();
-  const offer = page.getByRole("button", { name: "Watch an ad to unlock" });
-  await expect(offer).toBeVisible();
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(offer).toBeVisible({ timeout: 15_000 });
-  await page
-    .getByRole("link", { name: "API docs", exact: true })
-    .first()
-    .click();
-  await expect(page).toHaveURL(/\/developers$/, { timeout: 15_000 });
-  await page.goBack();
-  await expect(offer).toBeVisible();
-  await page
-    .getByRole("button", { name: "Privacy settings", exact: true })
-    .click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog.locator("a[data-branding]")).toHaveCount(0);
-  // c15t reloads the document after persisting a revoked category.
-  await Promise.all([
-    page.waitForEvent("domcontentloaded"),
-    dialog.getByRole("button", { name: "Reject All", exact: true }).click(),
-  ]);
-  await expect(
-    page.getByRole("button", { name: "Review advertising consent" }),
-  ).toBeVisible({ timeout: 15_000 });
-  await expect(offer).toHaveCount(0);
-  const state = await page.context().storageState();
-  const returning = await browser.newContext({ baseURL, storageState: state });
-  returning.setDefaultTimeout(10_000);
-  try {
-    const saved = await returning.newPage();
-    let savedRequests = 0;
-    await saved.route(publisher, (route) => {
-      savedRequests++;
-      return route.abort("blockedbyclient");
-    });
-    await saved.goto(report, { waitUntil: "domcontentloaded" });
-    await expect(
-      saved.getByRole("button", { name: "Accept All", exact: true }),
-    ).toHaveCount(0);
-    await saved
-      .getByRole("button", { name: "Review advertising consent" })
-      .click();
-    expect(savedRequests).toBe(0);
-    await saved
-      .getByRole("dialog")
-      .getByRole("button", { name: "Accept All", exact: true })
-      .click();
-    const savedOffer = saved.getByRole("button", {
-      name: "Watch an ad to unlock",
-    });
-    await savedOffer.click();
-    await expect(
-      saved.getByText("The Google test ad script could not load."),
-    ).toBeVisible();
-    await expect(savedOffer).toHaveCount(0);
-    await expect(
-      saved.getByRole("heading", {
-        name: "Where your data flows",
-        exact: true,
-      }),
-    ).toHaveCount(0);
-  } finally {
-    await returning.close();
-  }
-});
-
-for (const allowLimited of [false, true]) {
-  test(`remembers a GPC visitor's ${allowLimited ? "grant" : "refusal"} of limited Google ads`, async ({
-    page,
-    context,
-  }) => {
-    test.setTimeout(60_000);
-    await page.setExtraHTTPHeaders({ "Sec-GPC": "1" });
-    await page.addInitScript(() =>
-      Object.defineProperty(navigator, "globalPrivacyControl", { value: true }),
-    );
-    let standardRequests = 0;
-    let limitedRequests = 0;
-    await page.route(publisher, (route) => {
-      standardRequests++;
-      return route.abort("blockedbyclient");
-    });
-    await page.route(
-      "https://pagead2.googlesyndication.com/tag/js/gpt.js",
-      (route) => {
-        limitedRequests++;
-        return route.abort("blockedbyclient");
+// A minimal IAB TCF API, as Google's consent message would expose it.
+async function stubTcf(page: Page, purposeOne: boolean) {
+  await page.addInitScript((granted) => {
+    Reflect.set(
+      window,
+      "__tcfapi",
+      (
+        command: string,
+        _version: number,
+        callback: (data: object, success: boolean) => void,
+      ) => {
+        if (command !== "addEventListener") return;
+        callback(
+          {
+            eventStatus: "tcloaded",
+            gdprApplies: true,
+            listenerId: 1,
+            purpose: { consents: { 1: granted } },
+          },
+          true,
+        );
       },
     );
-    await page.goto(report, { waitUntil: "domcontentloaded" });
-    const funding = page.getByRole("dialog", {
-      name: "Help fund the next scan",
-    });
-    await page.addLocatorHandler(funding, () =>
-      funding.getByRole("button", { name: "Close", exact: true }).click(),
-    );
-    const banner = page.getByText("Optional privacy settings", { exact: true });
-    await expect(banner).toBeVisible({ timeout: 15_000 });
-    expect(standardRequests + limitedRequests).toBe(0);
-    await page.getByRole("button", { name: "Customize", exact: true }).click();
-    const dialog = page.getByRole("dialog", {
-      name: "Privacy Settings",
-      exact: true,
-    });
-    const limited = dialog.getByRole("switch", {
-      name: "Limited Google ads",
-      exact: true,
-    });
-    await expect(limited).not.toBeChecked();
-    await expect(
-      dialog.getByRole("switch", { name: "Marketing", exact: true }),
-    ).toHaveCount(0);
-    if (allowLimited)
-      await dialog
-        .getByRole("button", { name: "Accept All", exact: true })
-        .click();
-    else {
-      await dialog
-        .getByRole("switch", { name: "Analytics", exact: true })
-        .check();
-      await dialog
-        .getByRole("button", { name: "Save Settings", exact: true })
-        .click();
-    }
-    await expect(dialog).toBeHidden();
-    await expect
-      .poll(async () =>
-        (await context.cookies()).some((cookie) => cookie.name === "c15t"),
-      )
-      .toBe(true);
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await page
-      .getByRole("button", { name: "Privacy settings", exact: true })
-      .click();
-    await expect(dialog).toBeVisible();
-    await expect(
-      dialog.getByRole("switch", { name: "Analytics", exact: true }),
-    ).toBeChecked();
-    await expect(limited).toBeChecked({ checked: allowLimited });
-    await expect(
-      dialog.getByRole("switch", { name: "Marketing", exact: true }),
-    ).toHaveCount(0);
-    await expect(banner).toHaveCount(0);
-    expect(standardRequests).toBe(0);
-    if (!allowLimited) expect(limitedRequests).toBe(0);
-    await page.goto("/advertising-disclosure", {
-      waitUntil: "domcontentloaded",
-    });
-    const status = page.locator("#browser-privacy [aria-live]");
-    if (allowLimited) {
-      await expect(status).toContainText("You’ve allowed limited Google ads");
-      await page
-        .getByRole("button", { name: "Privacy settings", exact: true })
-        .click();
-      await Promise.all([
-        page.waitForEvent("domcontentloaded"),
-        dialog.getByRole("button", { name: "Reject All", exact: true }).click(),
-      ]);
-    }
-    await expect(status).toContainText("Personalized advertising is off");
-    const previousLimitedRequests = limitedRequests;
-    await page.goto(report, { waitUntil: "domcontentloaded" });
-    await expect(
-      page.getByRole("button", { name: "Watch an ad to unlock" }),
-    ).toHaveCount(0);
-    await page
-      .getByRole("button", { name: "Review limited ad settings", exact: true })
-      .click();
-    await expect(limited).not.toBeChecked();
-    await expect(banner).toHaveCount(0);
-    expect(limitedRequests).toBe(previousLimitedRequests);
-    expect(standardRequests).toBe(0);
-  });
+  }, purposeOne);
 }
+
+for (const granted of [false, true])
+  test(`follows the TCF purpose 1 choice for rewarded sample ads: ${granted ? "granted" : "refused"}`, async ({
+    page,
+  }) => {
+    let requests = 0;
+    await page.route(publisher, (route) => {
+      requests++;
+      return route.abort("blockedbyclient");
+    });
+    await stubTcf(page, granted);
+    await page.goto(report);
+    const offer = page.getByRole("button", { name: "Watch an ad to unlock" });
+    if (granted) await expect(offer).toBeVisible();
+    else {
+      // Without the AdSense tag, the settings control links to the privacy page.
+      await expect(
+        page.getByRole("link", { name: "Review advertising consent" }),
+      ).toHaveAttribute("href", "/privacy#reports");
+      await expect(offer).toHaveCount(0);
+      expect(requests).toBe(0);
+    }
+  });
+
 test("a guest opts in once, can close without a grant, and can retry a completed unlock", async ({
   page,
   context,
@@ -401,7 +253,6 @@ test("a guest opts in once, can close without a grant, and can retry a completed
   });
   await mockPublisher(page, "playable");
   await page.goto(report);
-  await page.getByRole("button", { name: "Accept All", exact: true }).click();
   await expect(graph).toHaveCount(0);
   await offer.click();
   await expect(page.getByText("The Google sample ad is open.")).toBeVisible();

@@ -7,7 +7,7 @@ import { proPlansPath } from "../../../lib/checkout-return";
 function useCheckout() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  async function checkout(plan: "monthly" | "yearly" | "api-credits") {
+  async function checkout(plan: "monthly" | "yearly") {
     setBusy(true);
     setNotice("");
     try {
@@ -16,17 +16,14 @@ function useCheckout() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
       });
-      const target =
-        plan === "api-credits" ? "/account/developer" : "/account/billing";
       if (response.status === 401) {
         window.location.assign(
-          "/account?returnTo=" +
-            encodeURIComponent(plan === "api-credits" ? target : proPlansPath),
+          "/account?returnTo=" + encodeURIComponent(proPlansPath),
         );
         return;
       }
-      if (response.status === 409 && plan !== "api-credits") {
-        window.location.assign(target);
+      if (response.status === 409) {
+        window.location.assign("/account/billing");
         return;
       }
       if (!response.ok) throw new Error("Checkout unavailable");
@@ -73,32 +70,5 @@ export function CheckoutButtons({
         {notice}
       </p>
     </div>
-  );
-}
-
-export function CreditPackCheckout({
-  credits,
-  price,
-}: {
-  credits: number;
-  price: string;
-}) {
-  const { busy, notice, checkout } = useCheckout();
-  return (
-    <>
-      <Button
-        variant="primary"
-        onPress={() => void checkout("api-credits")}
-        isDisabled={busy}
-      >
-        Buy {credits} test credits for {price}
-      </Button>
-      <p
-        role="status"
-        className="m-0 basis-full text-sm text-danger empty:hidden"
-      >
-        {notice}
-      </p>
-    </>
   );
 }

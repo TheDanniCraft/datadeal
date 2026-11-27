@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { queueBoostCost } from "@datadeal/contracts/paper-plane";
 
-/** Spend report points to move a waiting scan to the front of the queue. */
+/** Spend points (or a Pro free boost) to move a waiting scan to the front of the queue. */
 export function BoostScan({
   scanId,
   balance,
